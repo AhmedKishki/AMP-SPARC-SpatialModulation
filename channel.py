@@ -120,32 +120,48 @@ class Channel:
             h = hr + 1j * hi
         else:
             h = np.random.normal(size=(self.Nr, self.Nt, self.Lh), scale = 1/np.sqrt(self.Nr))
-
-        h = h * np.sqrt(self.pdp)
         
-        # full convolution matrix (channel_truncation = 'tail')
-        Lout = self.Lh + self.Lin - 1
-        H = np.zeros((self.Nr, Lout, self.Nt, self.Lin), dtype=self.npdtype)
-        for nr in range(self.Nr):
-            for nt in range(self.Nt):
-                for l in range(self.Lh):
-                    H[nr, :, nt, :] += np.eye(Lout, self.Lin, -l, dtype=self.npdtype) * h[nr, nt, l]
+        H = np.zeros((self.Lin*self.Nr, self.Lin*self.Nt), dtype=self.npdtype)
+        for l in np.arange(self.Lh):
+            H += np.kron(np.eye(self.Lin, self.Lin, -l), h[:,:, l]*np.sqrt(self.pdp[l]))
         
-        if self.trunc == 'trunc':
-            # delete transient rows
-            Lout = self.Lin
-            H = H[:, :Lout, :, :]
-            
+        if self.trunc == 'tail':
+            # add post-transient samples making frame longer (more rows in H)
+            H_append = np.zeros((self.Nr * (self.Lh - 1), self.Nt * self.Lin), dtype=H.dtype)
+            tail = H[-self.Nr:, -self.Nt*self.Lh:-self.Nt]
+            for l in np.arange(self.Lh-1):
+                H_append[l*self.Nr:(l+1)*self.Nr, -self.Nt*(self.Lh-l-1):] = tail[:, :self.Nt*(self.Lh-l-1)]
+                H = np.block([[H],[H_append]])
+        
         elif self.trunc == 'cyclic':
-            # cyclic convolution
-            Lout = self.Lin
-            H_ = np.zeros((self.Nr, Lout, self.Nt, self.Lin))
-            for nr in range(self.Nr):
-                for nt in range(self.Nt):
-                    for l in range(self.Lh):
-                        H_[nr, :, nt, :] += np.eye(Lout, self.Lin, self.Lin - self.Lh + l + 1) * h[nr, nt, - l - 1]
-            H = H[:, :Lout, :, :] + H_
-        H = torch.tensor(np.reshape(H, (self.Nr * Lout, self.Nt * self.Lin)), dtype=self.datatype, requires_grad=False, device=self.device)
+            # cyclic convolution --> give H cyclic Toeplitz structure (fill upper right corner)
+            tail = H[-self.Nr:, -self.Nt*self.Lh:-self.Nt]
+            for Lh in np.arange(self.Lh-1):
+                H[Lh*self.Nr:(Lh+1)*self.Nr, -self.Nt*(self.Lh-Lh-1):] = tail[:, :self.Nt*(self.Lh-Lh-1)]
+
+        # # full convolution matrix (channel_truncation = 'tail')
+        # Lout = self.Lh + self.Lin - 1
+        # H = np.zeros((self.Nr, Lout, self.Nt, self.Lin), dtype=self.npdtype)
+        # for nr in range(self.Nr):
+        #     for nt in range(self.Nt):
+        #         for l in range(self.Lh):
+        #             H[nr, :, nt, :] += np.eye(Lout, self.Lin, -l, dtype=self.npdtype) * h[nr, nt, l]
+        
+        # if self.trunc == 'trunc':
+        #     # delete transient rows
+        #     Lout = self.Lin
+        #     H = H[:, :Lout, :, :]
+            
+        # elif self.trunc == 'cyclic':
+        #     # cyclic convolution
+        #     Lout = self.Lin
+        #     H_ = np.zeros((self.Nr, Lout, self.Nt, self.Lin))
+        #     for nr in range(self.Nr):
+        #         for nt in range(self.Nt):
+        #             for l in range(self.Lh):
+        #                 H_[nr, :, nt, :] += np.eye(Lout, self.Lin, self.Lin - self.Lh + l + 1) * h[nr, nt, - l - 1]
+        #     H = H[:, :Lout, :, :] + H_
+        # H = torch.tensor(np.reshape(H, (self.Nr * Lout, self.Nt * self.Lin)), dtype=self.datatype, requires_grad=False, device=self.device)
         return H
     
     def generate_svd(self) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:

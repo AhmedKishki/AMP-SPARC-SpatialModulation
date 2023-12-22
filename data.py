@@ -23,16 +23,16 @@ class Data:
         Returns:
             torch.Tensor: size Batch, N_transmit_antenna*Lin, 1 
         """
-        x = np.zeros((self.B, self.Nt, self.Lin), dtype=self.npdtype)
+        x = np.zeros((self.B, self.Lin, self.Nt), dtype=self.npdtype)
         for b in range(self.B):
             for l in range(self.Lin):
                 Na = np.random.choice(self.Nt, size=self.Na, replace=False)
-                x[b, Na, l] = np.random.choice(self.symbols, size=1)
+                x[b, l, Na] = np.random.choice(self.symbols, size=1)
         x = np.reshape(x, (self.B, -1, 1))
         return torch.tensor(x, device=self.device, dtype=self.datatype, requires_grad=False)
     
 if __name__ == "__main__":
-    config = Config(2, 6, 2, 5, 2, 5, 30, alphabet='8PSK')
-    data = GSSK(config)
+    config = Config(2, 6, 2, 5, 3, 5, 30, alphabet='QPSK')
+    data = Data(config)
     print(config.symbols)
-    print(data.generate().view(2, 6, -1))
+    print(data.generate().view(-1))

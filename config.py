@@ -116,13 +116,15 @@ class Config:
         else:
             raise NameError('alphabet should be one of: OOK, BPSK, QPSK, 8PSK, 16PSK or 16QAM')
         
-        self.signal_power = np.mean(np.abs(self.symbols)**2)
-        self.symbols = np.array(self.symbols, dtype=self.npdatatype) / self.signal_power
         self.N_symbols = len(self.symbols)
+        self.signal_power = np.sqrt(np.sum(np.abs(self.symbols)**2) / self.N_symbols)
+        self.symbols = np.array(self.symbols, dtype=self.npdatatype) / self.signal_power
         
         # AMP
         self.N_Layers = iterations
         self.epsilon = 1/self.sparsity - 1
         self.lmda = None
         
+        # save
+        self.name = f'M={self.alphabet},Nt={self.Nt},Na={self.Na},Nr={self.Nr},Lh={self.Lh},Lb={self.Lh}'
         

@@ -1,3 +1,5 @@
+import os
+
 import torch
 from torch import nn
 import numpy as np
@@ -19,32 +21,32 @@ class Model(nn.Module):
         self.BAMP = BAMP(config).to(config.device)
         self.channel = Channel(config)
         self.data = Data(config)
-
+        self.path = 'Simulations/BAMP,' + f'{config.name}'
+        os.makedirs(self.path, exist_ok=True)
+        
     @torch.no_grad()
-    def run(self, SNR_db: float) -> Loss:
-        SNR= 10 ** ( SNR_db / 10)
-        print(SNR)
+    def run(self, SNRdB: float) -> Loss:
+        SNR = 10 ** ( SNRdB / 10)
         self.channel.generate(svd=False)
         x = self.data.generate()
         y = self.channel(x, SNR)
         loss = self.BAMP(x, y, self.channel)
+        loss.save_stats(f'SNRdB={SNRdB}', self.path)
         return loss
     
-    def simulate(self, runs, SNR_db_start, SNR_db_final, SNR_db_step):
-        pass
+    def simulate(self, start: float, final: float, step: float = 1):
+        SNRdB_range = np.arange(start, final+step, step)
+        for SNRdB in SNRdB_range:
+            self.run(SNRdB)
         
 if __name__ == "__main__":
-    config = Config(batch=50, 
+    config = Config(batch=100,
                     N_transmit_antenna=200,
                     N_active_antenna=10,
                     N_receive_antenna=200,
                     block_length=20,
                     channel_length=10,
                     iterations=15,
-                    alphabet='16PSK')
+                    alphabet='OOK')
     model = Model(config)
-    loss = model.run(20.)
-    print(loss.SER)
-    print(loss.VER)
-    print(loss.hardMSE)
-    print(loss.softMSE)
+    model.simulate(0, 40, 1)
