@@ -110,5 +110,7 @@ class BAMP(nn.Module):
         for i, layer in enumerate(self.layers):
             xamp, var, V, Z = layer(y, xamp, var, V, Z, channel)
             self.loss(xamp, x)
+            # if i > 1:
+            #     break
         return self.loss
         

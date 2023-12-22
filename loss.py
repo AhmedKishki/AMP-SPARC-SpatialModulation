@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 from config import Config
 
@@ -23,9 +24,9 @@ class Loss:
             xamp (torch.Tensor): _description_
             x (torch.Tensor): _description_
         """
-        x, xamp, xhat, norm = x.cpu(), xamp.cpu(), self.xhat(xamp), torch.mean(torch.abs(x)**2)
-        self.softMSE.append((torch.mean(torch.abs(xamp - x)**2) / norm).item())
-        self.hardMSE.append((torch.mean(torch.abs(xhat - x)**2) / norm).item())
+        x, xamp, xhat = x.cpu(), xamp.cpu(), self.xhat(xamp)
+        self.softMSE.append((torch.mean(torch.abs(xamp - x)**2) / self.sparsity / 2).item())
+        self.hardMSE.append((torch.mean(torch.abs(xhat - x)**2) / self.sparsity / 2).item())
         self.ErrorRate(xhat, x)
         self.Statistics(xhat, x)
         
@@ -49,7 +50,7 @@ class Loss:
             xhat (torch.Tensor): _description_
             x (torch.Tensor): _description_
         """
-        NMSE = torch.mean(torch.abs(xhat - x)**2) / torch.mean(torch.abs(x)**2)
+        NMSE = torch.mean(torch.abs(xhat - x)**2) / torch.mean(torch.abs(x)**2 / 2)
         self.softMSE.append(NMSE.item())
 
     def ErrorRate(self, xhat: torch.Tensor, x:torch.Tensor) -> None:
@@ -82,7 +83,6 @@ class Loss:
         """
         xamp = xamp.cpu().view(-1)
         args = torch.topk(torch.abs(xamp), k=self.Ns).indices
-        xhats = torch.zeros(self.Ns, dtype=self.datatype)
         xhat = torch.zeros_like(xamp)
         
         for i, xs in enumerate(xamp[args]):
@@ -90,9 +90,9 @@ class Loss:
             for s in self.symbols:
                 ds = torch.abs(xs - s)**2
                 if ds < d:
-                    xhats[i] = s
-                
-        xhat[args] = xhats
+                    d = ds
+                    xhat[args[i]] = s
+                    
         return xhat.view(self.B, -1, 1)
     
     def demodulation(self, xamp: torch.Tensor, mapping='gray'):

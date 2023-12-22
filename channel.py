@@ -62,8 +62,8 @@ class Channel:
         Returns:
             torch.Tensor: _description_
         """
-        self.sigma2 = self.Na / SNR / 2
-        sigma = np.sqrt(self.sigma2 / self.Nr / self.N_symbols)
+        self.sigma2 = self.Na / self.N_symbols / SNR
+        sigma = np.sqrt(self.Na / self.Nr / self.N_symbols / SNR / 2)
         awgn_r = torch.normal(mean=0., std=sigma, size=(self.B, self.Nr * self.Lout, 1), device=self.device)
         awgn_i = torch.normal(mean=0., std=sigma, size=(self.B, self.Nr * self.Lout, 1), device=self.device)
         return awgn_r + 1j * awgn_i
@@ -78,8 +78,8 @@ class Channel:
         Returns:
             torch.Tensor: _description_
         """
-        self.sigma2 = self.Na / SNR / 2
-        sigma = np.sqrt(self.sigma2 / self.Nr / self.N_symbols)
+        self.sigma2 = self.Na / self.N_symbols / SNR
+        sigma = np.sqrt(self.Na / self.Nr / self.N_symbols / SNR / 2)
         return torch.normal(mean=0., std=sigma, size=(self.B, self.Nr * self.Lout, 1), device=self.device)
     
     def generate(self, svd: bool = False) -> None:

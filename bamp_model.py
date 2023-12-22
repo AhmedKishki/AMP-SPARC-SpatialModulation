@@ -37,13 +37,13 @@ if __name__ == "__main__":
     config = Config(batch=50, 
                     N_transmit_antenna=200,
                     N_active_antenna=10,
-                    N_receive_antenna=20,
+                    N_receive_antenna=200,
                     block_length=20,
                     channel_length=10,
                     iterations=15,
-                    alphabet='OOK')
+                    alphabet='16PSK')
     model = Model(config)
-    loss = model.run(15.)
+    loss = model.run(20.)
     print(loss.SER)
     print(loss.VER)
     print(loss.hardMSE)
