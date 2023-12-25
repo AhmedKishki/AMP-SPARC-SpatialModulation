@@ -1,11 +1,12 @@
 from typing import Tuple
 import torch
 from torch import nn
+from torch.special import hermite_polynomial_he
 
 from config import Config
 
 class Shrink(nn.Module):
-    def __init__(self, config: Config, shrink_fn: str):
+    def __init__(self, config: Config, shrink_fn: str) -> None:
         """_summary_
 
         Args:
@@ -16,11 +17,9 @@ class Shrink(nn.Module):
         assert shrink_fn in ["bayes", "shrink", "lasso"], "shrink_fn needs to be 'bayes' or 'shrink' or 'lasso'"
          
         self.Ps, self.P0 = config.Ps, config.P0
-        self.datatype = config.datatype 
-        self.lmda = config.lmda
-        self.symbols = torch.tensor(config.symbols, device=config.device)
+        self.symbols = torch.tensor(config.symbols, device=config.device, dtype=config.datatype)
         self.symbols2 = torch.abs(self.symbols)**2
-        self.tol = 1.1e-20
+        self.tol = 1e-20
         
         if shrink_fn == "bayes":
             self.shrinkage = self.bayes
@@ -28,7 +27,7 @@ class Shrink(nn.Module):
             self.shrinkage = self.shrink
         elif shrink_fn == "lasso":
             self.shrinkage = self.lasso
-            
+        
     def forward(self, 
                   r: torch.Tensor, 
                   cov: torch.Tensor
@@ -43,6 +42,10 @@ class Shrink(nn.Module):
             Tuple[torch.Tensor, torch.Tensor]: _description_
         """
         return self.shrinkage(r, cov)
+    
+    def regularize(self, a):
+        a[a==0] = self.tol
+        return a
     
     def bayes(self, 
                   r: torch.Tensor, 
@@ -59,10 +62,21 @@ class Shrink(nn.Module):
         """
         G = lambda s: torch.exp(- torch.abs(r - s)**2 / cov )
         G0, Gs = G(0), G(self.symbols)
-        norm = self.P0 * G0 + self.Ps * torch.sum(Gs, dim=-1).unsqueeze(-1) + self.tol
+        norm = self.regularize(self.P0 * G0 + self.Ps * torch.sum(Gs, dim=-1).unsqueeze(-1))
         exp = self.Ps * torch.sum(self.symbols * Gs, dim=-1).unsqueeze(-1) / norm
         var = self.Ps * torch.sum(self.symbols2 * Gs, dim=-1).unsqueeze(-1) / norm - torch.abs(exp)**2
         return exp, var.to(torch.float32)
+    
+    def slidingwindow(self, r, cov):
+        """_summary_
+
+        Args:
+            r (_type_): _description_
+            cov (_type_): _description_
+        """
+        r = r.view(-1, self.Lin, self.Nt)
+        cov = cov.view(-1, self.Lin, self.Nt)
+        
     
     def shrink(self, 
                 r: torch.Tensor, 

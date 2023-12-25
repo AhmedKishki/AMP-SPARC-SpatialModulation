@@ -17,11 +17,6 @@ class BAMPLayer(nn.Module):
             config (Config): _description_
         """
         super().__init__()
-        self.Lin = config.Lin
-        self.Nt, self.Nr = config.Nt, config.Nr
-        self.P0, self.Ps = config.P0, config.Ps
-        self.tol = 1e-10
-        
         self.shrinkage = Shrink(config, "bayes")
         
     def forward(self,
@@ -51,7 +46,6 @@ class BAMPLayer(nn.Module):
         cov = 1 / (channel.Habs2_adj @ U_next)
         r = xamp_prev + cov * (channel.Hadj @ ((y - Z_next) * U_next))
         xamp_next, var_next = self.shrinkage(r, cov)
-
         return xamp_next, var_next, V_next, Z_next
     
     def bayesOOK(self, 
@@ -77,12 +71,9 @@ class BAMP(nn.Module):
         super().__init__()
         self.device = config.device
         self.insize = config.insize
-        self.B, self.Lin, self.Nt, self.Na, self.Nr = config.B, config.Lin, config.Nt, config.Na, config.Nr
         self.sparsity = config.sparsity
         self.datatype = config.datatype
         self.N_Layers = config.N_Layers
-        self.xlen = config.xlen
-        self.N, self.M = config.N, config.M
         
         self.layers = nn.ModuleList([BAMPLayer(config) for _ in range(self.N_Layers)])
         self.loss = Loss(config)
@@ -103,14 +94,13 @@ class BAMP(nn.Module):
             Loss: _description_
         """
         self.loss.init()
+        channel.generate_filter()
         xamp = torch.zeros(self.insize, device=self.device, dtype=self.datatype)
-        var = torch.ones(self.insize, device=self.device, dtype=torch.float32)  * self.Na / self.Nr
+        var = torch.ones(self.insize, device=self.device, dtype=torch.float32)  * self.sparsity
         V = torch.zeros_like(y)
         Z = y
         for i, layer in enumerate(self.layers):
             xamp, var, V, Z = layer(y, xamp, var, V, Z, channel)
             self.loss(xamp, x)
-            # if i > 1:
-            #     break
         return self.loss
         
