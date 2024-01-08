@@ -1,6 +1,7 @@
 from typing import Tuple
 import torch
 import numpy as np
+import json
 
 from config import Config
 
@@ -12,19 +13,30 @@ class Loss:
             config (Config): _description_
         """
         super().__init__()
-        self.B, self.Nt, self.Na, self.Lin = config.B, config.Nt, config.Na, config.Lin
-        self.M = self.Nt * self.Lin
+        self.B, self.Nt, self.Na, self.Nr, self.Lin = config.B, config.Nt, config.Na, config.Nr, config.Lin
         self.Ns, self.sparsity = config.Ns, config.sparsity
-        # self.info_bits = config.info_bits
-        self.symbols = torch.tensor(config.symbols, dtype=config.datatype)
-        # self.gray = torch.tensor(config.gray)
-        self.datatype = config.datatype
-        self.device = config.device
+        self.gray = config.gray
+        self.symbols = config.symbols
+        self.ibits = config.index_bits
+        self._ibits = config.index_bits + int(np.ceil(np.log2(self.B * self.Lin)))
+        self.sbits = config.symbol_bits
+        self.rate = config.code_rate
+        self.loss = {}
+        self.keys = ['fer', 'mMSE', 'pMSE', 'pMSEf', 'pMSEm', 'pMSEL', 'ver', 'verf', 'verm', 'verL', 'ber', 'ier', 'ser']
+        
+        if config.is_complex:
+            self.dtype = torch.complex64
+            self.npdtype = np.complex64
+        else:
+            self.dtype = torch.float32
+            self.npdtype = np.complex64
 
     def __call__(self, 
                  xamp: torch.Tensor, 
-                 x: torch.Tensor
-                 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+                 x: torch.Tensor,
+                 symbols: np.ndarray = None,
+                 indices: np.ndarray = None
+                 ) -> None:
         """_summary_
 
         Args:
@@ -34,152 +46,154 @@ class Loss:
         Returns:
             Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: _description_
         """
-        xamp = xamp.cpu()
-        x = x.cpu()
-        xhat = self.xhat(xamp)
-        MSE = torch.sum(torch.abs(xamp - x)**2) / self.Ns
-        VER = torch.count_nonzero(xhat - x) / self.Ns
-        SER = (torch.sum(xhat.view(-1, self.Nt) - x.view(-1, self.Nt), dim=-1) != 0).sum() / self.Lin / self.B
-        FER = (torch.sum(xhat.view(-1, self.M) - x.view(-1, self.M), dim=-1) != 0).sum() / self.B
-        self.MSE = np.append(self.MSE, MSE.item()) # Mean square error
-        self.VER = np.append(self.VER, VER.item()) # maximum number of errors is 2 times the number of ones
-        self.SER = np.append(self.SER, SER.item()) # Section error rate
-        self.FER = np.append(self.FER, FER.item()) # Frame error rate
+        for key, value in zip(self.keys, self.error_rate(xamp, x, symbols, indices)):
+            try:
+                self.loss[key] = np.append(self.loss[key], value)
+            except KeyError:
+                self.loss[key] = np.array(value)
         
-    def export(self, name: str, save_location: str) -> None:
+    def error_rate(self, 
+                 xamp: torch.Tensor, 
+                 x: torch.Tensor,
+                 symbols: np.ndarray = None,
+                 indices: np.ndarray = None
+                 ) -> Tuple[np.ndarray]:
         """_summary_
 
         Args:
-            name (str): _description_
-        """
-        stats = np.zeros((4, len(self.SER)))
-        stats[0] = self.MSE
-        stats[1] = self.VER
-        stats[2] = self.SER
-        stats[3] = self.FER
-        np.savetxt(f'{save_location}/{name}.csv', stats, delimiter=",")
-
-    def init(self):
-        """
-        initialise between epochs
-        """
-        # # initial values
-        self.MSE = np.array([])
-        self.VER = np.array([])
-        self.SER = np.array([])
-        self.FER = np.array([])
-    
-    def xhat(self, xamp: torch.Tensor) -> torch.Tensor:
-        """
-        TopK decision: Largest B*Na*Lin terms are assumed to be nonzero, while the rest are assumed to be zero.
-        Hard decision is then performed on the non zero set.
-        
-        !!!Does not perserve the original structure of x, and may have more than Na active antennas per section!!!
-
-        Args:
             xamp (torch.Tensor): _description_
+            x (torch.Tensor): _description_
+            symbols (np.ndarray): _description_
+            indices (np.ndarray): _description_
 
         Returns:
-            torch.Tensor: cpu
+            _type_: _description_
         """
-        xamp = xamp.view(-1)
-        args = torch.topk(torch.abs(xamp), k=self.Ns).indices
-        xhat = torch.zeros_like(xamp)
-        for j, xs in enumerate(xamp[args]):
-            d = torch.inf
-            for s in self.symbols:
-                ds = torch.abs(xs - s)**2
+        xamp, x = xamp.cpu().view(-1, self.Lin, self.Nt).numpy(), x.cpu().view(-1, self.Lin, self.Nt).numpy()
+        xhat, shat, ihat = self.hard_decision(xamp)
+        xhat = xhat.reshape((-1, self.Lin, self.Nt))
+        
+        # measured mean Square Error
+        mMSE = np.sum(np.abs(xamp - x)**2) / self.Ns
+        
+        # predicted mean square error
+        pMSE, pMSEf, pMSEm, pMSEL = self.mean_square_error(xhat, x)
+        
+        # Section Error
+        ver, verf, verm, verL = self.vector_error_rate(xhat, x)
+        
+        # Frame Error
+        fer = self.frame_error_rate(xhat, x)
+        
+        # bit error rate, index error rate, symbol error rate
+        ber, ier, ser = self.bit_error_rate(shat, ihat, symbols, indices)
+        
+        return fer, mMSE, pMSE, pMSEf, pMSEm, pMSEL, ver, verf, verm, verL, ber, ier, ser
+    
+    def mean_square_error(self, xhat, x):
+        # Mean Square Error
+        pMSE = np.sum(np.abs(xhat - x)**2) / self.Ns
+        pMSEf = np.sum(np.abs(xhat[:, 0] - x[:, 0])**2) / self.Na / self.B
+        pMSEm = np.sum(np.abs(xhat[:, self.Lin//2] - x[:, self.Lin//2])**2) / self.Na / self.B  
+        pMSEL = np.sum(np.abs(xhat[:, -1] - x[:, -1])**2) / self.Na / self.B
+        return pMSE, pMSEf, pMSEm, pMSEL
+    
+    def vector_error_rate(self, xhat, x):
+        # vector Error
+        ver = (np.sum(xhat.reshape((-1, self.Nt)) - x.reshape((-1, self.Nt)), axis=-1) != 0).sum() / self.Lin / self.B
+        verf = (np.sum(xhat[:, 0] - x[:, 0], axis=-1) != 0).sum() / self.B
+        verm = (np.sum(xhat[:, self.Lin//2] - x[:, self.Lin//2], axis=-1) != 0).sum() / self.B
+        verL = (np.sum(xhat[:, -1] - x[:, -1], axis=-1) != 0).sum() / self.B
+        return ver, verf, verm, verL
+    
+    def frame_error_rate(self, xhat, x):
+        # Frame Error
+        fer = (np.sum(xhat.reshape(self.B, -1) - x.reshape(self.B, -1), axis=-1) != 0).sum() / self.B
+        return fer
+    
+    def bit_error_rate(self, sym_hat, ind_hat, sym, ind):
+        # index error rate
+        ier_ = np.count_nonzero(self.de2bi(np.bitwise_xor(ind_hat, ind), self._ibits)) / self.Ns
+        ier = ier_ / self.ibits
+        try:
+            # symbol error rate
+            ser_ = np.count_nonzero(self.de2bi(np.bitwise_xor(sym_hat, sym), self.sbits)) / self.Ns
+            ser = ser_ / self.sbits
+        except ZeroDivisionError:
+            ser = 0.
+            ser_ = 0.
+        # bit error rate
+        ber = (ier_ + ser_) / (self.sbits + self.ibits)
+        return ber, ier, ser
+    
+    def de2bi(self, dec: np.ndarray, bits: int):
+        dec = dec.astype(int)
+        bi = np.zeros((len(dec), bits), dtype=int)
+        for i in range(bits):
+            bi[:, i] = dec % 2
+            dec = dec // 2
+        return np.flip(bi, axis=1)
+            
+    def hard_decision(self, xamp: np.ndarray) -> Tuple[np.ndarray]:
+        """_summary_
+
+        Args:
+            xamp (np.ndarray): _description_
+
+        Returns:
+            Tuple[np.ndarray]: _description_
+        """
+        xamp = xamp.ravel()
+        index = np.sort(np.abs(xamp).argsort()[-self.Ns:])
+        symbol = np.zeros_like(index)
+        xhat = np.zeros_like(xamp)
+        for j, xs in enumerate(xamp[index]):
+            d = np.inf
+            for i, s in enumerate(self.symbols):
+                ds = np.abs(xs - s)
                 if ds < d:
                     d = ds
-                    xhat[args[j]] = s
-        return xhat.view(self.B, -1, 1)
+                    symbol[j] = self.gray[i]
+                    xhat[index[j]] = s
+                    if ds == 0:
+                        break
+        return xhat, symbol, index
     
-    # def measure(self, xamp: torch.Tensor, x:torch.Tensor, z: torch.Tensor):
-    #     """_summary_
+    def export(self, SNRdB: float, EbN0dB: float, save_location: str) -> None:
 
-    #     Args:
-    #         xamp (torch.Tensor): _description_
-    #         x (torch.Tensor): _description_
-    #         z (torch.Tensor): _description_
-    #     """
-    #     x, z, xamp = x.cpu().view(-1, self.Nt), z.cpu().view(-1), xamp.cpu().view(-1, self.Nt)
-    #     xhat, zhat = self.xhat_section(xamp)
-    #     SpatialBitER = torch.count_nonzero(torch.abs(xhat) - torch.abs(x)).item()
-    #     ModulationBitER = sum(bin(a ^ b).count('1') for a, b in zip(zhat, z))
-    #     BER = (SpatialBitER + ModulationBitER) / self.info_bits
-    #     SER = (torch.sum(xhat - x, dim=-1) != 0).sum().item() / self.Lin / self.B
-    #     FER = (torch.sum(xhat.view(-1, self.M) - x.view(-1, self.M), dim=-1) != 0).sum().item() / self.B
-    #     MSE = torch.sum(torch.abs(xamp - x)**2).item() / self.Ns
-    #     return BER, SER, FER, MSE
+        self.loss['EbN0dB'] = float(EbN0dB)
+        self.loss['SNRdB'] = float(SNRdB)
+        self.loss['rate'] = float(self.rate)
+        self.loss['C'] = float(np.log2(1 + 10**(SNRdB / 10)))
         
-    # def xhat_section(self, xamp: torch.Tensor) -> torch.Tensor:
-    #     """_summary_
-
-    #     Args:
-    #         xamp (torch.Tensor): _description_
-
-    #     Returns:
-    #         torch.Tensor: _description_
-    #     """
-    #     symbol, index = self.sectiontopNa(xamp)
-    #     xhat = torch.zeros(self.B, self.Lin, self.Nt, dtype=self.datatype)
-    #     zhat = torch.zeros(self.B, self.Lin, dtype=torch.uint8)
-    #     for i in range(self.B):
-    #         for j in range(self.Lin):
-    #             xs = symbol[i, j]
-    #             d = torch.inf
-    #             for k, s in zip(self.gray, self.symbols):
-    #                 ds = torch.abs(xs - s)**2
-    #                 if ds < d:
-    #                     d = ds
-    #                     xhat[i, j, index[i, j].int()] = s
-    #                     zhat[i, j] = k
-    #     xhat = xhat.view(-1, self.Nt)
-    #     zhat = zhat.view(-1)
-    #     return xhat, zhat
+        for key in self.keys:
+            self.loss[key] = list(self.loss[key])
         
-    # def sectiontopNa(self, xamp: torch.Tensor) -> torch.Tensor:
-    #     """_summary_
-
-    #     Args:
-    #         xamp (torch.Tensor): _description_
-
-    #     Returns:
-    #         torch.Tensor: _description_
-    #     """
-    #     xamp = xamp.view(self.B, self.Lin, self.Nt)
-    #     symbol = torch.zeros(self.B, self.Lin, dtype=self.datatype)
-    #     index = torch.zeros(self.B, self.Lin, self.Na)
-    #     for i in range(self.B):
-    #         for j in range(self.Lin):
-    #             values, indices = torch.abs(xamp[i, j]).topk(k=self.Na)
-    #             best = values.topk(k=1).indices
-    #             symbol[i, j] =  xamp[i, j, indices][best]
-    #             index[i, j] = indices
-    #     return symbol, index
-  
+        with open(f'{save_location}/{EbN0dB}.json', 'w', encoding='utf-8') as f:
+            json.dump(self.loss, f, ensure_ascii=False, indent=6, skipkeys=True)
+            
+        self.loss = {}
+    
     def accumulate(self, other):
         """_summary_
 
         Args:
             other (_type_): _description_
         """
-        if len(self.SER) == len(other.SER):
-            self.SER += other.SER
-            self.VER += other.VER
-            self.MSE += other.MSE 
-            self.FER += other.FER
-        elif len(self.SER) == 0:
-            self.SER = other.SER
-            self.VER = other.VER
-            self.MSE = other.MSE 
-            self.FER = other.FER
-        else:
-            print(len(self.SER), len(other.SER), self.SER, other.SER)
-            raise Exception("something bad happen")
+        for key in self.keys:
+            try:
+                self.loss[key] += other.loss[key]
+            except KeyError:
+                self.loss[key] = other.loss[key]
             
     def average(self, epochs: int):
-        self.SER = self.SER / epochs
-        self.VER = self.VER / epochs
-        self.MSE = self.MSE / epochs
-        self.FER = self.FER / epochs
+        """_summary_
+
+        Args:
+            epochs (int): _description_
+        """
+        for key in self.keys:
+            self.loss[key] = list(np.array(self.loss[key]) / epochs)
+            
+    def dump(self):
+        self.loss = {}

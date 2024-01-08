@@ -4,11 +4,22 @@ from torch import nn
 from torch.nn import functional as F
 
 from config import Config
-from loss import Loss
-from channel import Channel
 from shrink import Shrink
+from loss import Loss
 
-
+class Tracker:
+    def __init__(self, x: torch.Tensor, y: torch.Tensor, H: torch.Tensor, sigma2: float):
+        self.y = y
+        self.H = H
+        self.sigma2 = sigma2
+        self.adj = H.adjoint()
+        self.abs2 = H.abs()**2
+        self.abs2T = self.abs2.T
+        self.xamp = torch.zeros_like(x)
+        self.var = torch.ones_like(x, dtype=torch.float32)
+        self.V = torch.zeros_like(y)
+        self.Z = y
+        
 class BAMPLayer(nn.Module):
     def __init__(self, config: Config) -> None:
         """_summary_
@@ -17,71 +28,48 @@ class BAMPLayer(nn.Module):
             config (Config): _description_
         """
         super().__init__()
-        self.shrinkage = Shrink(config, "bayes")
+        self.denoiser = Shrink(config, "bayes")
         
     def forward(self,
-                y: torch.Tensor,
-                xamp_prev: torch.Tensor,
-                var_prev: torch.Tensor,
-                V_prev: torch.Tensor,
-                Z_prev: torch.Tensor,
-                channel: Channel
-                )-> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+                T: Tracker
+                )-> None:
         """_summary_
 
         Args:
             y (torch.Tensor): _description_
-            xamp (torch.Tensor): _description_
-            var (torch.Tensor): _description_
-            V (torch.Tensor): _description_
-            Z (torch.Tensor): _description_
-            channel (Channel): _description_
-
-        Returns:
-            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: _description_
-        """
-        V_next = channel.Habs2 @ var_prev
-        Z_next = channel.H @ xamp_prev - V_next * (y - Z_prev) / (V_prev + channel.sigma2)
-        U_next = 1 / (V_next + channel.sigma2)
-        cov = 1 / (channel.Habs2_adj @ U_next)
-        r = xamp_prev + cov * (channel.Hadj @ ((y - Z_next) * U_next))
-        xamp_next, var_next = self.shrinkage(r, cov)
-        return xamp_next, var_next, V_next, Z_next
-    
-    def bayesOOK(self, 
-                  r: torch.Tensor, 
-                  cov: torch.Tensor
-                  ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """_summary_
-
-        Args:
-            r (torch.Tensor): _description_
-            cov (torch.Tensor): _description_
+            T (Tracker): _description_
 
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: _description_
         """
-        eta = (self.P0 / self.Ps) * torch.exp((1 - 2*r) / cov) + self.tol
-        exp = 1 / ( 1 + eta )
-        var = exp - exp**2
-        return exp, var
+        U = 1 / (T.V + T.sigma2)
+        T.V = T.abs2 @ T.var
+        T.Z = T.H @ T.xamp - T.V * (T.y - T.Z) * U
+        U = 1 / (T.V + T.sigma2)
+        cov = 1 / (T.abs2T @ U)
+        r = T.xamp + cov * (T.adj @ ((T.y - T.Z) * U))
+        T.xamp, T.var = self.denoiser(r, cov)
+        return T.xamp
     
 class BAMP(nn.Module):
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, save_all_layers: bool = True) -> None:
         super().__init__()
+        self.E = config.Na / config.Nr
+        self.save = save_all_layers
         self.device = config.device
-        self.insize = config.insize
         self.sparsity = config.sparsity
-        self.datatype = config.datatype
         self.N_Layers = config.N_Layers
         
         self.layers = nn.ModuleList([BAMPLayer(config) for _ in range(self.N_Layers)])
-        self.loss = Loss(config)
+        self.L = Loss(config)
 
     def forward(self,
                 x:torch.Tensor, 
-                y: torch.Tensor, 
-                channel: Channel, 
+                y: torch.Tensor,
+                H: torch.Tensor,
+                SNR: float,
+                symbols: torch.Tensor,
+                indices: torch.Tensor
                 ) -> Loss:
         """_summary_
 
@@ -91,16 +79,14 @@ class BAMP(nn.Module):
             channel (Channel): _description_
 
         Returns:
-            Loss: _description_
+            xamp: _description_
         """
-        self.loss.init()
-        channel.generate_filter()
-        xamp = torch.zeros(self.insize, device=self.device, dtype=self.datatype)
-        var = torch.ones(self.insize, device=self.device, dtype=torch.float32)  * self.sparsity
-        V = torch.zeros_like(y)
-        Z = y
+        sigma2 = self.E / SNR 
+        T = Tracker(x, y, H, sigma2)
+        self.L.dump()
         for i, layer in enumerate(self.layers):
-            xamp, var, V, Z = layer(y, xamp, var, V, Z, channel)
-            self.loss(xamp, x)
-        return self.loss
+            xamp = layer(T)
+            self.L(xamp, x, symbols, indices)
+        return self.L
+    
         

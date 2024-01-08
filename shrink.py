@@ -1,7 +1,6 @@
 from typing import Tuple
 import torch
 from torch import nn
-from torch.special import hermite_polynomial_he
 
 from config import Config
 
@@ -17,7 +16,13 @@ class Shrink(nn.Module):
         assert shrink_fn in ["bayes", "shrink", "lasso"], "shrink_fn needs to be 'bayes' or 'shrink' or 'lasso'"
          
         self.Ps, self.P0 = config.Ps, config.P0
-        self.symbols = torch.tensor(config.symbols, device=config.device, dtype=config.datatype)
+        
+        if config.is_complex:
+            self.dtype = torch.complex64
+        else:
+            self.dtype = torch.float32
+        
+        self.symbols = torch.tensor(config.symbols, device=config.device, dtype=self.dtype)
         self.symbols2 = torch.abs(self.symbols)**2
         self.tol = 1e-20
         
@@ -66,17 +71,6 @@ class Shrink(nn.Module):
         exp = self.Ps * torch.sum(self.symbols * Gs, dim=-1).unsqueeze(-1) / norm
         var = self.Ps * torch.sum(self.symbols2 * Gs, dim=-1).unsqueeze(-1) / norm - torch.abs(exp)**2
         return exp, var.to(torch.float32)
-    
-    def slidingwindow(self, r, cov):
-        """_summary_
-
-        Args:
-            r (_type_): _description_
-            cov (_type_): _description_
-        """
-        r = r.view(-1, self.Lin, self.Nt)
-        cov = cov.view(-1, self.Lin, self.Nt)
-        
     
     def shrink(self, 
                 r: torch.Tensor, 
