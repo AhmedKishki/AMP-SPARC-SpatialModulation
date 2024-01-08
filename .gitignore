@@ -1,7 +1,6 @@
 *.txt
 *.json
 *.pyc
-*.gitignore
 vampyre
 vamp_dnn
 
