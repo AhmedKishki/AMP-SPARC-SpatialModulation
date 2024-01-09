@@ -22,10 +22,10 @@ class Data:
         self.Nt = config.Nt
         self.Na = config.Na
         self.Ns = config.Na
-        # self.L, self.M = config.L, config.M
         self.device = config.device
         self.symbols = config.symbols
         self.gray = config.gray
+        self.info_bits = config.info_bits
         self.cardinality = len(self.symbols)
         
         if config.is_complex:
@@ -37,11 +37,11 @@ class Data:
             
         if config.mode == 'random':
             self._generator = self.random
-        elif config.mode == 'sparc':
+        elif config.mode == 'segmented':
             assert self.Nt % self.Na == 0,'Na must divide Nt'
+            self.section = self.Nt // self.Na
             self._generator = self.segmented
 
-        
     def generate_message(self) -> torch.Tensor:
         """_summary_
 
@@ -77,20 +77,18 @@ class Data:
         Returns:
             _type_: _description_
         """
-        x = np.zeros((self.B, self.L, self.M), dtype=self.npdtype)
-        indices = np.zeros((self.B, self.L, 1))
-        symbols = np.zeros((self.B, self.L, 1))          
+        x = np.zeros((self.B, self.Lin, self.Nt), dtype=self.npdtype)
+        xgray = np.zeros((self.B, self.Lin, self.Nt), dtype=int) 
         for i in range(self.B):
-            for j in range(self.L):
-                space_index = np.random.choice(self.M)
+            for j in range(self.Lin):
+                space_index = [i*self.section + np.random.choice(self.section) for i in range(self.Na)]
                 mod_index = np.random.choice(self.cardinality)
-                symbols[i, j] = mod_index
-                indices[i, j] = space_index
                 x[i, j, space_index] = self.symbols[mod_index]
+                xgray[i, j, space_index] = self.gray[mod_index]
         x = np.reshape(x, (self.B, -1, 1))
-        symbols = np.reshape(symbols, -1)
-        indices = np.reshape(indices, -1)
-        return x, symbols, indices
+        index = x.ravel().nonzero()[0]
+        symbol = xgray.ravel()[index]
+        return x, symbol, index
     
 if __name__ == "__main__":
     pass

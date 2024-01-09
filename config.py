@@ -10,7 +10,7 @@ class Config:
                  channel_length : int,
                  batch : int = 100,
                  generator_mode: str = 'random',
-                 iterations: int =20,
+                 iterations: int = 20,
                  alphabet: str = 'OOK',
                  channel_profile : str = 'exponential',
                  power_allocation : str = 'uniform',
@@ -43,7 +43,7 @@ class Config:
         assert channel_truncation in ['trunc', 'tail', 'cyclic'], "channel_truncation has to be 'trunc', 'tail' or 'cyclic'"
         assert channel_length > 0, "channel_length needs to be at least 1"
         assert generator_mode in ['segmented', 'random'], "generator_mode needs to be 'segmented' or 'random'"
-        assert alphabet in ['OOK','BPSK','QPSK','8PSK','16PSK','16QAM'], "alphabet has to be 'OOK','BPSK','QPSK','8PSK','16PSK' or'16QAM'"
+        assert alphabet in ['OOK','BPSK','4ASK','QPSK','8PSK','16PSK','16QAM'], "alphabet has to be 'OOK','BPSK','4ASK','QPSK','8PSK','16PSK' or'16QAM'"
         
         self.device = device
         
@@ -87,6 +87,11 @@ class Config:
             self.symbols = [-1, 1]
             self.gray = [0, 1]
             self.Ps = self.Ps / 2
+            
+        elif alphabet == '4ASK':
+            self.symbols = [-3, -1, 1, 3]
+            self.gray = [0, 1, 3, 2]
+            self.Ps = self.Ps / 4
 
         elif alphabet == 'QPSK':
             self.symbols = [1+0j, 0+1j, -1+0j, 0-1j]
@@ -120,7 +125,7 @@ class Config:
             # self.M = self.Nt
             # self.L = self.Lin
             # self.n = self.Lout * self.Nr
-            self.index_bits = int(np.ceil(np.log2(np.prod([1 + (self.Nt - self.Na)/j for j in range(1, self.Na+1)]))))
+            self.index_bits = np.log2(np.prod([1 + (self.Nt - self.Na)/j for j in range(1, self.Na+1)]))
             self.info_bits = self.symbol_bits + self.index_bits
             self.code_rate = self.Lin * self.info_bits / self.Nr / self.Lout
         
@@ -129,9 +134,9 @@ class Config:
             # self.M = self.Nt // self.Na
             # self.L = self.Lin * self.Na
             # self.n = self.Lout * self.Nr
-            self.index_bits = np.ceil(np.log2(self.Nt / self.Na))
+            self.index_bits = self.Na * np.log2(self.Nt / self.Na)
             self.info_bits = self.symbol_bits + self.index_bits
-            self.code_rate = self.Lin * self.Na * np.log2(self.modsize * self.Nt / self.Na) / self.Nr / self.Lout
+            self.code_rate = self.Lin * self.info_bits / self.Nr / self.Lout
         
         # AMP
         self.N_Layers = iterations
@@ -143,4 +148,4 @@ class Config:
         self.min_snr_dB = 10*np.log10(self.min_snr)
         
         # save
-        self.name = f'{self.alphabet},{self.profile},{self.trunc}/Nt={self.Nt},Na={self.Na},Nr={self.Nr},Lh={self.Lh},Lin={self.Lin}'
+        self.name = f'{self.alphabet},{self.mode}/{self.profile},{self.trunc}/Nt={self.Nt},Na={self.Na},Nr={self.Nr},Lh={self.Lh},Lin={self.Lin}'

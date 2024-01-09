@@ -22,7 +22,7 @@ class Model(nn.Module):
         self.loss = Loss(config)
         self.channel = Channel(config)
         self.data = Data(config)
-        self.path = 'Simulations/BAMP/' + f'{config.name}'
+        self.path = f'Simulations/BAMP/{config.name}'
         os.makedirs(self.path, exist_ok=True)
         
         # with open(f'{self.path}/config.json', 'w', encoding='utf-8') as f:
@@ -38,7 +38,7 @@ class Model(nn.Module):
         return loss
     
     def simulate(self, epochs: int, step: float = 1):
-        EbN0 = np.arange(-1, 15+step, step)
+        EbN0 = np.arange(-1, 10+step, step)
         SNRdB_range = EbN0 + 10*np.log10(self.rate)
         for SNRdB, EbN0dB in zip(SNRdB_range, EbN0):
             SNR = 10 ** ( SNRdB / 10)
@@ -53,19 +53,23 @@ if __name__ == "__main__":
     Nt = 128
     Nr = 32
     Lin = 20
-    Lh = 3
-    for Na in [1,2,3,4]:
-        for a in ['OOK','BPSK','QPSK','8PSK','16PSK','16QAM']:
-            config = Config(
-                            N_transmit_antenna=Nt,
-                            N_active_antenna=Na,
-                            N_receive_antenna=Nr,
-                            block_length=Lin,
-                            channel_length=Lh,
-                            channel_truncation='tail',
-                            alphabet=a,
-                            channel_profile='exponential'
-                            )
-            print(config.__dict__)
-            model = Model(config)
-            model.simulate(epochs=10, step=1)
+    for trunc in ['tail', 'trunc']:
+        for Lh in [3, 5]:
+            for Na in [1, 2, 3, 4]:
+                for alph in ['OOK','4ASK','QPSK','8PSK','16PSK','16QAM']:
+                    for prof in ['uniform','exponential']:
+                        for gen in ['random']:
+                            config = Config(
+                                            N_transmit_antenna=Nt,
+                                            N_active_antenna=Na,
+                                            N_receive_antenna=Nr,
+                                            block_length=Lin,
+                                            channel_length=Lh,
+                                            channel_truncation=trunc,
+                                            alphabet=alph,
+                                            channel_profile=prof,
+                                            generator_mode=gen
+                                            )
+                            print(config.__dict__)
+                            model = Model(config)
+                            model.simulate(epochs=10, step=1)
