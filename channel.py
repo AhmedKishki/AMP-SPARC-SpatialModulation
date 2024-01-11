@@ -36,14 +36,6 @@ class Channel:
         else:
             self.dtype = torch.float32
             self.npdtype = np.float32
-    
-    def capacity(self, SNR) -> float:
-        """AWGN capacity
-
-        Returns:
-            _type_: _description_
-        """
-        return np.log2(1 + SNR)
         
     def generate_channel(self) -> torch.Tensor:
         """
@@ -65,7 +57,7 @@ class Channel:
         else:
             h = np.random.normal(size=(self.Nr, self.Nt, self.Lh))
             
-        h = h * np.sqrt(self.pdp) / np.sqrt(2 * self.Nr) 
+        h = h * np.sqrt(self.pdp / self.Nr / 2) 
         H = np.zeros((self.Lin*self.Nr, self.Lin*self.Nt), dtype=self.npdtype)
         for l in np.arange(self.Lh):
             H += np.kron(np.eye(self.Lin, self.Lin, -l), h[:,:, l])
@@ -84,7 +76,29 @@ class Channel:
             for Lh in np.arange(self.Lh-1):
                 H[Lh*self.Nr:(Lh+1)*self.Nr, -self.Nt*(self.Lh-Lh-1):] = tail[:, :self.Nt*(self.Lh-Lh-1)]
         return torch.tensor(H, dtype=self.dtype, requires_grad=False, device=self.device)
-       
+    
+    def generate_as_sparc(self) -> torch.Tensor:
+        """
+        Returns:
+            torch.Tensor: _description_
+        """
+        W = np.zeros((self.Lout, self.Lin))
+        for l in np.arange(self.Lh):
+            W += np.eye(self.Lout, self.Lin, -l) * self.pdp[l]
+        W = W / W.mean() * self.Na / self.Nr
+        
+        hr = np.random.normal(size=(self.Nr, self.Nt, self.Lh))
+        hj = np.random.normal(size=(self.Nr, self.Nt, self.Lh))
+        h = (hr + 1j * hj) / np.sqrt(2 * self.Na * self.Lin)
+        
+        A = np.zeros((self.Nr * self.Lout, self.Nt * self.Lin), dtype=self.npdtype)
+        for l in range(self.Lh):
+            A += np.kron(np.eye(self.Lout, self.Lin, -l) * np.sqrt(W), h[:,:,l])
+        
+        W = torch.tensor(W, dtype=torch.float32, requires_grad=False, device=self.device)
+        A = torch.tensor(A, dtype=self.dtype, requires_grad=False, device=self.device)
+        return W, A
+    
     def awgn(self, SNR) -> torch.Tensor:
         """
         generate awgn for MIMO

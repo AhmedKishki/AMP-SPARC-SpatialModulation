@@ -55,12 +55,8 @@ class BAMP(nn.Module):
     def __init__(self, config: Config, save_all_layers: bool = True) -> None:
         super().__init__()
         self.E = config.Na / config.Nr
-        self.save = save_all_layers
-        self.device = config.device
-        self.sparsity = config.sparsity
-        self.N_Layers = config.N_Layers
         
-        self.layers = nn.ModuleList([BAMPLayer(config) for _ in range(self.N_Layers)])
+        self.layers = nn.ModuleList([BAMPLayer(config) for _ in range(config.N_Layers)])
         self.L = Loss(config)
 
     def forward(self,
@@ -81,8 +77,7 @@ class BAMP(nn.Module):
         Returns:
             xamp: _description_
         """
-        sigma2 = self.E / SNR 
-        T = Tracker(x, y, H, sigma2)
+        T = Tracker(x, y, H, self.E / SNR)
         self.L.dump()
         for i, layer in enumerate(self.layers):
             xamp = layer(T)

@@ -42,7 +42,7 @@ class Config:
         assert power_allocation in ['exponential', 'uniform'], "power_allocation has to be 'exponential' or 'uniform'"
         assert channel_truncation in ['trunc', 'tail', 'cyclic'], "channel_truncation has to be 'trunc', 'tail' or 'cyclic'"
         assert channel_length > 0, "channel_length needs to be at least 1"
-        assert generator_mode in ['segmented', 'random'], "generator_mode needs to be 'segmented' or 'random'"
+        assert generator_mode in ['segmented', 'random', 'sparc'], "generator_mode needs to be 'segmented' or 'random' or 'sparc'"
         assert alphabet in ['OOK','BPSK','4ASK','QPSK','8PSK','16PSK','16QAM'], "alphabet has to be 'OOK','BPSK','4ASK','QPSK','8PSK','16PSK' or'16QAM'"
         
         self.device = device
@@ -118,25 +118,33 @@ class Config:
             self.is_complex = True
         
         self.symbols = np.array(self.symbols) / np.sqrt(np.mean(np.abs(self.symbols)**2))
-        self.modsize = len(self.symbols)
-        self.symbol_bits = int(np.log2(self.modsize))
+        self.K = len(self.symbols)
+        self.symbol_bits = int(np.log2(self.K))
         
         if self.mode == 'random':
-            # self.M = self.Nt
-            # self.L = self.Lin
-            # self.n = self.Lout * self.Nr
             self.index_bits = np.log2(np.prod([1 + (self.Nt - self.Na)/j for j in range(1, self.Na+1)]))
             self.info_bits = self.symbol_bits + self.index_bits
             self.code_rate = self.Lin * self.info_bits / self.Nr / self.Lout
         
         elif self.mode == 'segmented':
             assert self.Nt % self.Na == 0,'Na must divide Nt'
-            # self.M = self.Nt // self.Na
-            # self.L = self.Lin * self.Na
-            # self.n = self.Lout * self.Nr
             self.index_bits = self.Na * np.log2(self.Nt / self.Na)
             self.info_bits = self.symbol_bits + self.index_bits
             self.code_rate = self.Lin * self.info_bits / self.Nr / self.Lout
+            
+        elif self.mode == 'sparc':
+            assert self.Nt % self.Na == 0,'Na must divide Nt'
+            self.M = self.Nt // self.Na
+            self.Mc = self.Nt
+            self.Mr = self.Nr
+            self.L = self.Na * self.Lin
+            self.Lc = self.Lin
+            self.Lr = self.Lout
+            self.n = self.Nr * self.Lout
+            self.index_bits = self.Na * np.log2(self.M)
+            self.symbol_bits = int(np.log2(self.K))
+            self.inner_code_rate = self.Na * np.log2(self.M * self.K) / self.Mr
+            self.code_rate = self.Lc * self.inner_code_rate / self.Lr
         
         # AMP
         self.N_Layers = iterations

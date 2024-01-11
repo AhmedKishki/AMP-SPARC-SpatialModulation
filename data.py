@@ -25,7 +25,6 @@ class Data:
         self.device = config.device
         self.symbols = config.symbols
         self.gray = config.gray
-        self.info_bits = config.info_bits
         self.cardinality = len(self.symbols)
         
         if config.is_complex:
@@ -37,7 +36,7 @@ class Data:
             
         if config.mode == 'random':
             self._generator = self.random
-        elif config.mode == 'segmented':
+        elif (config.mode == 'segmented' or config.mode == 'sparc'):
             assert self.Nt % self.Na == 0,'Na must divide Nt'
             self.section = self.Nt // self.Na
             self._generator = self.segmented
@@ -89,6 +88,6 @@ class Data:
         index = x.ravel().nonzero()[0]
         symbol = xgray.ravel()[index]
         return x, symbol, index
-    
+
 if __name__ == "__main__":
     pass

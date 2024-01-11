@@ -9,7 +9,7 @@ from config import Config
 from data import Data
 from channel import Channel
 from loss import Loss
-from bamp import BAMP
+from scamp import SCAMP
 
 
 class Model(nn.Module):
@@ -18,11 +18,11 @@ class Model(nn.Module):
         
         # build
         self.rate = config.code_rate
-        self.BAMP = BAMP(config).to(config.device)
+        self.amp = SCAMP(config).to(config.device)
         self.loss = Loss(config)
         self.channel = Channel(config)
         self.data = Data(config)
-        self.path = f'Simulations/BAMP/{config.name}'
+        self.path = f'Simulations/SCAMP/{config.name}'
         os.makedirs(self.path, exist_ok=True)
         
         # with open(f'{self.path}/config.json', 'w', encoding='utf-8') as f:
@@ -31,16 +31,16 @@ class Model(nn.Module):
     @torch.no_grad()
     def run(self, SNR: float) -> Loss:
         x, s, i = self.data.generate_message()
-        H = self.channel.generate_channel()
-        y = H @ x + self.channel.awgn(SNR)
-        loss = self.BAMP(x, y, H, SNR, s, i)
-        print(loss.loss)
+        W, A = self.channel.generate_as_sparc()
+        y = A @ x + self.channel.awgn(SNR)
+        loss = self.amp(W, A, y, SNR, x, s, i)
+        print(loss.loss['fer'])
         return loss
     
     def simulate(self, epochs: int, step: float = 1):
-        EbN0 = np.arange(11, 15+step, step)
-        SNRdB_range = EbN0 + 10*np.log10(self.rate)
-        for SNRdB, EbN0dB in zip(SNRdB_range, EbN0):
+        EbN0dB_range = np.arange(-1, 10+step, step)
+        SNRdB_range = EbN0dB_range + 10*np.log10(self.rate)
+        for SNRdB, EbN0dB in zip(SNRdB_range, EbN0dB_range):
             SNR = 10 ** ( SNRdB / 10)
             for i in range(epochs):
                 print(EbN0dB, i)
@@ -54,11 +54,11 @@ if __name__ == "__main__":
     Nr = 32
     Lin = 20
     for trunc in ['tail']:
-        for Lh in [3, 5]:
+        for Lh in [3]:
             for Na in [1, 2, 4]:
-                for alph in ['OOK','BPSK','4ASK','QPSK','8PSK','16PSK','16QAM']:
-                    for prof in ['uniform','exponential']:
-                        for gen in ['segmented']:
+                for alph in ['OOK','BPSK','QPSK','8PSK','16PSK']:
+                    for prof in ['uniform']:
+                        for gen in ['sparc']:
                             config = Config(
                                             N_transmit_antenna=Nt,
                                             N_active_antenna=Na,

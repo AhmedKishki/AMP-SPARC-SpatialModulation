@@ -8,6 +8,10 @@ from channel import Channel
 from shrink import Shrink
 from loss import Loss
 
+class Tracker:
+    def __init__(self, x, y, U, s, Vh, sigma2):
+        pass
+        
 
 class VAMPLayer(nn.Module):
     def __init__(self, config: Config) -> None:
@@ -65,10 +69,8 @@ class VAMP(nn.Module):
         """
         super().__init__()
         self.device = config.device
-        self.xsize = config.insize
         self.B = config.B
         self.sparsity = config.sparsity
-        self.datatype = config.datatype
         self.N_Layers = config.N_Layers
         
         # setup
@@ -78,7 +80,12 @@ class VAMP(nn.Module):
     def forward(self,
                 x: torch.Tensor,
                 y: torch.Tensor, 
-                channel: Channel,
+                U: torch.Tensor,
+                s: torch.Tensor,
+                Vh: torch.Tensor,
+                SNR: float,
+                symbols,
+                indices,
                 ) -> torch.Tensor:
         """_summary_
 

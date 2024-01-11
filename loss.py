@@ -30,12 +30,11 @@ class Loss:
         else:
             self.dtype = torch.float32
             self.npdtype = np.complex64
-            
-        if config.mode == 'segmented':
-            self.section = self.Nt // self.Na
-            self.decision = self.segmented_decision
-        else:
+    
+        if config.mode == 'random':
             self.decision = self.random_decision
+        else:
+            self.decision = self.MAP_decision
 
     def __call__(self, 
                  xamp: torch.Tensor, 
@@ -159,33 +158,24 @@ class Loss:
                         break
         return xhat, symbol, index
     
-    # def segmented_decision(self, xamp: np.ndarray) -> Tuple[np.ndarray]:
-    #     xamp = xamp.reshape(-1, self.Na)
-    #     xamp2 = np.zeros_like(xamp)
-    #     for j, x in enumerate(xamp):
-    #         index = np.abs(x).argsort()[-1]
-    #         xamp2[j, index] = x[index]
-    #     xhat, symbol, index = self.random_decision(xamp2) 
-    #     return xhat, symbol, index
-    
     def segmented_decision(self, xamp: np.ndarray) -> Tuple[np.ndarray]:
-        xamp = xamp.reshape(-1, self.Nt)
+        xamp = xamp.reshape(-1, self.Nt // self.Na)
         xhat = np.zeros_like(xamp)
         xgray = np.zeros_like(xamp, dtype=int)
         for j, x in enumerate(xamp):
-            index = [np.abs(x[self.section*k:self.section*(k+1)]).argsort()[-1] for k in range(self.Na)]
-            xs = x[np.abs(x).argsort()[-1]]
+            ind = np.abs(x).argsort()[-1]
+            xs = x[ind]
             d = np.inf
             for i, s in enumerate(self.symbols):
                 ds = np.abs(xs - s)
                 if ds < d:
                     d = ds
-                    xgray[j, index] = self.gray[i]
-                    xhat[j, index] = s
+                    xgray[j, ind] = self.gray[i]
+                    xhat[j, ind] = s
                     if ds == 0:
                         break
         xhat = xhat.ravel()
-        index = xhat.nonzero()[0]
+        index = np.sort(xhat.nonzero()[0])
         symbol = xgray.ravel()[index]
         return xhat, symbol, index
     
@@ -206,7 +196,21 @@ class Loss:
                     if ds == 0:
                         break
         xhat = xhat.ravel()
-        index = xhat.nonzero()[0]
+        index = np.sort(xhat.nonzero()[0])
+        symbol = xgray.ravel()[index]
+        return xhat, symbol, index
+    
+    def MAP_decision(self, xamp: np.ndarray) -> Tuple[np.ndarray]:
+        xamp = xamp.reshape(-1, self.Nt // self.Na)
+        xhat = np.zeros_like(xamp)
+        xgray = np.zeros_like(xamp, dtype=int)
+        for j, x in enumerate(xamp):
+            tmp = np.outer(x.conj(), self.symbols).real
+            idx1, idx2 = np.unravel_index(tmp.argmax(), tmp.shape)
+            xhat[j, idx1] = self.symbols[idx2]
+            xgray[j, idx1] = self.gray[idx2]
+        xhat = xhat.ravel()
+        index = np.sort(xhat.nonzero()[0])
         symbol = xgray.ravel()[index]
         return xhat, symbol, index
             
