@@ -7,14 +7,16 @@ import matplotlib.pyplot as plt
 from config import Config
 
 class Plotter:
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, algorithm):
+        self.algorithm = algorithm
+        self.mode = config.mode
         self.Nt, self.Na, self.Nr = config.Nt, config.Na, config.Nr
         self.Lin, self.Lh = config.Lin, config.Lh
         self.profile = config.profile
         self.iterations = config.N_Layers
         self.alphabet = config.alphabet
         self.name = f'{config.alphabet},Nt={config.Nt},Na={config.Na},Nr={config.Nr},Lh={config.Lh},{config.mode},{config.profile}'
-        self.dir = f'Simulations/SCAMP/{config.name}'
+        self.dir = f'Simulations/{algorithm}/{config.name}'
         self.sim = {}
         
         self.N = 0
@@ -41,6 +43,7 @@ class Plotter:
         plt.xlabel('EbN0_dB')
         plt.title(f'{self.alphabet} VER, FER, MSE, BER plot')
         plt.legend()
+        plt.savefig(f'Plots/{self.mode}/{self.name}_plot.png')
         plt.savefig(f'{self.dir}/{self.name}_plot.png')
     
     def get_metrics(self):

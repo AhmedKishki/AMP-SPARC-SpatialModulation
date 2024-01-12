@@ -10,6 +10,7 @@ from data import Data
 from channel import Channel
 from loss import Loss
 from scamp import SCAMP
+from plotter import Plotter
 
 
 class Model(nn.Module):
@@ -43,7 +44,7 @@ class Model(nn.Module):
         for SNRdB, EbN0dB in zip(SNRdB_range, EbN0dB_range):
             SNR = 10 ** ( SNRdB / 10)
             for i in range(epochs):
-                print(EbN0dB, i)
+                print(EbN0dB, SNRdB, i)
                 self.loss.accumulate(self.run(SNR))
             self.loss.average(epochs)
             print(self.loss.loss)
@@ -54,10 +55,11 @@ if __name__ == "__main__":
     Nr = 32
     Lin = 20
     for trunc in ['tail']:
-        for Lh in [3]:
+        for Lh in [3, 5]:
             for Na in [1, 2, 4]:
                 for alph in ['OOK','BPSK','QPSK','8PSK','16PSK']:
-                    for prof in ['uniform']:
+                # for alph in ['16QAM']:
+                    for prof in ['exponential']:
                         for gen in ['sparc']:
                             config = Config(
                                             N_transmit_antenna=Nt,
@@ -71,5 +73,5 @@ if __name__ == "__main__":
                                             generator_mode=gen
                                             )
                             print(config.__dict__)
-                            model = Model(config)
-                            model.simulate(epochs=10, step=1)
+                            Model(config).simulate(epochs=10, step=1)
+                            Plotter(config, 'SCAMP').plot_metrics()
