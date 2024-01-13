@@ -9,7 +9,7 @@ from config import Config
 from data import Data
 from channel import Channel
 from loss import Loss
-from scamp import SCAMP
+from bamp import BAMP
 from plotter import Plotter
 
 
@@ -19,11 +19,11 @@ class Model(nn.Module):
         
         # build
         self.rate = config.code_rate
-        self.amp = SCAMP(config).to(config.device)
+        self.BAMP = BAMP(config).to(config.device)
         self.loss = Loss(config)
         self.channel = Channel(config)
         self.data = Data(config)
-        self.path = f'Simulations/SCAMP/{config.name}'
+        self.path = f'Simulations/RANDOM/{config.name}'
         os.makedirs(self.path, exist_ok=True)
         
         # with open(f'{self.path}/config.json', 'w', encoding='utf-8') as f:
@@ -32,19 +32,19 @@ class Model(nn.Module):
     @torch.no_grad()
     def run(self, SNR: float) -> Loss:
         x, s, i = self.data.generate_message()
-        W, A = self.channel.generate_as_sparc()
-        y = A @ x + self.channel.awgn(SNR)
-        loss = self.amp(W, A, y, SNR, x, s, i)
-        print(loss.loss['fer'])
+        H = self.channel.generate_as_random()
+        y = H @ x + self.channel.awgn(SNR)
+        loss = self.BAMP(x, y, H, SNR, s, i)
+        print(loss.loss)
         return loss
     
-    def simulate(self, epochs: int, step: float = 1):
-        EbN0dB_range = np.arange(0, 10+step, step)
-        SNRdB_range = EbN0dB_range + 10*np.log10(self.rate)
-        for SNRdB, EbN0dB in zip(SNRdB_range, EbN0dB_range):
+    def simulate(self, epochs: int, step: float = 1, initial: float=0., final: float=10.):
+        EbN0 = np.arange(initial, final+step, step)
+        SNRdB_range = EbN0 + 10*np.log10(self.rate)
+        for SNRdB, EbN0dB in zip(SNRdB_range, EbN0):
             SNR = 10 ** ( SNRdB / 10)
             for i in range(epochs):
-                print(EbN0dB, SNRdB, i)
+                print(EbN0dB, i)
                 self.loss.accumulate(self.run(SNR))
             self.loss.average(epochs)
             print(self.loss.loss)
@@ -55,10 +55,10 @@ if __name__ == "__main__":
     Nr = 32
     Lin = 20
     for trunc in ['tail']:
-        for Lh in [3, 5]:
+        for Lh in [3]:
         # for Lh in [5]:
             for Na in [1, 2, 4]: 
-                for alph in ['8PSK','16PSK']:
+                for alph in ['QPSK', '8PSK','16PSK']:
                 # for alph in ['16QAM']:
                     for prof in ['uniform']:
                     # for prof in ['exponential']:
@@ -77,4 +77,4 @@ if __name__ == "__main__":
                                             )
                             print(config.__dict__)
                             Model(config).simulate(epochs=100, step=0.5)
-                            Plotter(config, 'SCAMP').plot_metrics()
+                            Plotter(config, 'RANDOM').plot_metrics()

@@ -13,7 +13,6 @@ class Config:
                  iterations: int = 20,
                  alphabet: str = 'OOK',
                  channel_profile : str = 'exponential',
-                 power_allocation : str = 'uniform',
                  channel_truncation : bool = 'trunc',
                  is_complex: bool = True,
                  device : str = 'cuda'
@@ -39,7 +38,6 @@ class Config:
             ValueError: _description_
         """
         assert channel_profile in ['exponential', 'uniform'], "channel_profile has to be 'exponential' or 'uniform'"
-        assert power_allocation in ['exponential', 'uniform'], "power_allocation has to be 'exponential' or 'uniform'"
         assert channel_truncation in ['trunc', 'tail', 'cyclic'], "channel_truncation has to be 'trunc', 'tail' or 'cyclic'"
         assert channel_length > 0, "channel_length needs to be at least 1"
         assert generator_mode in ['segmented', 'random', 'sparc'], "generator_mode needs to be 'segmented' or 'random' or 'sparc'"
@@ -57,7 +55,6 @@ class Config:
         self.is_complex = is_complex
         self.Lh = channel_length
         self.profile = channel_profile
-        self.power_allocation = power_allocation
         self.trunc = channel_truncation
     
         if channel_truncation != 'tail':

@@ -4,4 +4,7 @@
 *.png
 vampyre
 vamp_dnn
+__pycache__
+.idea
+.vscode
 

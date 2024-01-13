@@ -4,15 +4,19 @@ from torch import nn
 import numpy as np
 
 from config import Config
-from channel import Channel
 from shrink import Shrink
 from loss import Loss
 
 class Tracker:
-    def __init__(self, x, y, U, s, Vh, sigma2):
-        pass
+    def __init__(self, x, y, H, sigma2, sparsity):
+        self.noise_var = sigma2
+        self.U, self.s, self.Vh = torch.linalg.svd(H, full_matrices=False)
+        self.s2 = self.s**2
+        self.ytilde = self.U @ y / self.s
+        self.rtilde = torch.ones_like(self.ytilde) * sparsity
+        self.sigma2tilde = (0-sparsity)**2 * (1-sparsity) + (1-sparsity)**2 * sparsity
         
-
+        
 class VAMPLayer(nn.Module):
     def __init__(self, config: Config) -> None:
         """
@@ -22,14 +26,10 @@ class VAMPLayer(nn.Module):
             config (Config): _description_
         """
         super().__init__()
-        self.shrinkage = Shrink(config, 'bayes')
-        self.tol = [1e-20, -1e-20]
+        
         
     def forward(self, 
-                ytilde: torch.Tensor, 
-                r: torch.Tensor, 
-                g: torch.Tensor,
-                channel: Channel,
+                T: Tracker
                 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """_summary_
 
@@ -42,22 +42,13 @@ class VAMPLayer(nn.Module):
         Returns:
             Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: _description_
         """
-        xamp , var = self.shrinkage(r, g)
-        a = g * var.mean(dim=1).unsqueeze(-1)
-        rtilde = (xamp - a * r) / self.regularize(1 - a)
-        gtilde = g * (1 - a) / self.regularize(a)
-        t = channel.sigma2 * channel.s2 + gtilde.squeeze(-1).expand(-1, channel.R)
-        d = (channel.sigma2 * channel.s2 / self.regularize(t)).unsqueeze(-1)
-        dmean = d.mean(dim=1).unsqueeze(-1)
-        g = gtilde * dmean / self.regularize(channel.M / channel.R - dmean)
-        z = (d / dmean) * (ytilde - channel.Vh @ rtilde)
-        r = rtilde +  channel.M / channel.R * channel.V @ z
+        var_ratio = T.noise_var / T.sigma2tilde
+        scale = T.s2 / ( T.s2 + T.noise_var )
+        normLMMSE = 1 / scale.mean()
+        Q = T.Vh @ T.rtilde
+        xtilde = scale * (T.ytilde - Q)
 
-        return xamp, r, g
-    
-    def regularize(self, a:torch.Tensor):
-        a[a==0] = np.random.choice(self.tol)
-        return a
+        return 
 
 class VAMP(nn.Module):
     def __init__(self, config: Config) -> None:
@@ -70,22 +61,21 @@ class VAMP(nn.Module):
         super().__init__()
         self.device = config.device
         self.B = config.B
+        self.E = config.Na / config.Nr
         self.sparsity = config.sparsity
         self.N_Layers = config.N_Layers
         
         # setup
         self.layers = nn.ModuleList([VAMPLayer(config) for _ in range(self.N_Layers+1)])
-        self.loss = Loss(config)
+        self.L = Loss(config)
         
     def forward(self,
                 x: torch.Tensor,
                 y: torch.Tensor, 
-                U: torch.Tensor,
-                s: torch.Tensor,
-                Vh: torch.Tensor,
+                H: torch.Tensor,
                 SNR: float,
-                symbols,
-                indices,
+                symbols: np.ndarray,
+                indices: np.ndarray,
                 ) -> torch.Tensor:
         """_summary_
 
@@ -97,16 +87,12 @@ class VAMP(nn.Module):
         Returns:
             torch.Tensor: _description_
         """
-        self.loss.init()
-        channel.generate_svd()
-        ytilde = torch.diag(1/channel.s) @ (channel.Uh @ y)
-        r = torch.zeros(self.xsize, dtype=self.datatype, requires_grad=False, device=self.device)
-        g = self.sparsity
+        T = Tracker(x, y, H, self.E / SNR, self.sparsity)
+        self.L.dump()
         for i, layer in enumerate(self.layers):
-            xamp, r, g = layer(ytilde, r, g, channel)
-            if i > 1:
-                self.loss(xamp, x)
-        return self.loss
+            xamp = layer(T)
+            self.L(xamp, x, symbols, indices)
+        return self.L
          
 if __name__ == "__main__":
     pass

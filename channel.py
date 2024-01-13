@@ -50,14 +50,9 @@ class Channel:
         if 'cyclic':
             size: N_receive_antenna, N_transmit_antenna
         """
-        if self.is_complex:
-            hr = np.random.normal(size=(self.Nr, self.Nt, self.Lh))
-            hi = np.random.normal(size=(self.Nr, self.Nt, self.Lh))
-            h = hr + 1j * hi
-        else:
-            h = np.random.normal(size=(self.Nr, self.Nt, self.Lh))
-            
-        h = h * np.sqrt(self.pdp / self.Nr / 2) 
+        hr = np.random.normal(size=(self.Nr, self.Nt, self.Lh))
+        hi = np.random.normal(size=(self.Nr, self.Nt, self.Lh))
+        h = (hr + 1j * hi) * np.sqrt(self.pdp / self.Nr / 2) 
         H = np.zeros((self.Lin*self.Nr, self.Lin*self.Nt), dtype=self.npdtype)
         for l in np.arange(self.Lh):
             H += np.kron(np.eye(self.Lin, self.Lin, -l), h[:,:, l])
@@ -98,6 +93,12 @@ class Channel:
         W = torch.tensor(W, dtype=torch.float32, requires_grad=False, device=self.device)
         A = torch.tensor(A, dtype=self.dtype, requires_grad=False, device=self.device)
         return W, A
+    
+    def generate_as_random(self) -> torch.Tensor:
+        H = torch.normal(mean=0, std=1, size=(self.Nr*self.Lout, self.Nt*self.Lin), device=self.device)
+        H = H + 1j * torch.normal(mean=0, std=1, size=(self.Nr*self.Lout, self.Nt*self.Lin), device=self.device)
+        H = H / np.sqrt(2 * self.Lin * self.Nr)
+        return torch.tensor(H, dtype=self.dtype, requires_grad=False, device=self.device)
     
     def awgn(self, SNR) -> torch.Tensor:
         """
