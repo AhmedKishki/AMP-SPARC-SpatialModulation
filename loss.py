@@ -35,7 +35,9 @@ class Loss:
     
         if config.mode == 'random':
             self.decision = self.random_decision
-        else:
+        elif config.mode == 'segmented':
+            self.decision = self.segmented_decision
+        elif config.mode == 'sparc':
             self.decision = self.MAP_decision
 
     def __call__(self, 

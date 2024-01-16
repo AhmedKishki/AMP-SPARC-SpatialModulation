@@ -60,12 +60,12 @@ class BAMP(nn.Module):
         self.L = Loss(config)
 
     def forward(self,
-                x:torch.Tensor, 
-                y: torch.Tensor,
                 H: torch.Tensor,
+                y: torch.Tensor,
                 SNR: float,
-                symbols: torch.Tensor,
-                indices: torch.Tensor
+                x: torch.Tensor, 
+                symbols,
+                indices
                 ) -> Loss:
         """_summary_
 
