@@ -37,7 +37,7 @@ class Config:
         Raises:
             ValueError: _description_
         """
-        assert channel_profile in ['exponential', 'uniform'], "channel_profile has to be 'exponential' or 'uniform'"
+        assert channel_profile in ['exponential', 'uniform', 'random'], "channel_profile has to be 'exponential' or 'uniform'"
         assert channel_truncation in ['trunc', 'tail', 'cyclic'], "channel_truncation has to be 'trunc', 'tail' or 'cyclic'"
         assert channel_length > 0, "channel_length needs to be at least 1"
         assert generator_mode in ['segmented', 'random', 'sparc'], "generator_mode needs to be 'segmented' or 'random' or 'sparc'"
@@ -151,6 +151,7 @@ class Config:
         # simulation
         self.min_snr = 2**self.code_rate - 1
         self.min_snr_dB = 10*np.log10(self.min_snr)
+        self.shannon_limit_dB = self.min_snr_dB - 10*np.log10(self.code_rate)
         
         # save
         self.name = f'{self.alphabet},{self.mode}/{self.profile},{self.trunc}/Nt={self.Nt},Na={self.Na},Nr={self.Nr},Lh={self.Lh},Lin={self.Lin}'

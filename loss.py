@@ -21,8 +21,10 @@ class Loss:
         self.ibits = config.index_bits
         self.sbits = config.symbol_bits
         self.rate = config.code_rate
+        self.shannon_limt_dB = config.shannon_limit_dB
         self.loss = {}
-        self.keys = ['fer', 'mMSE', 'pMSE', 'pMSEf', 'pMSEm', 'pMSEL', 'ver', 'verf', 'verm', 'verL', 'ber', 'iber', 'sber', 'ier', 'ser']
+        self.loss['T'] = 0
+        self.keys = ['fer', 'nMSE', 'nMSEf', 'nMSEm', 'nMSEL', 'ver', 'verf', 'verm', 'verL', 'ber', 'iber', 'sber', 'ier', 'ser']
         
         if config.is_complex:
             self.dtype = torch.complex64
@@ -37,10 +39,12 @@ class Loss:
             self.decision = self.MAP_decision
 
     def __call__(self, 
-                 xamp: torch.Tensor, 
+                 xmap: torch.Tensor, 
+                 xmmse: torch.Tensor,
                  x: torch.Tensor,
-                 symbols: np.ndarray = None,
-                 indices: np.ndarray = None
+                 symbols: np.ndarray,
+                 indices: np.ndarray,
+                 iterations: int
                  ) -> None:
         """_summary_
 
@@ -51,14 +55,16 @@ class Loss:
         Returns:
             Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: _description_
         """
-        for key, value in zip(self.keys, self.error_rate(xamp, x, symbols, indices)):
+        self.loss['T'] = iterations
+        for key, value in zip(self.keys, self.error_rate(xmap, xmmse, x, symbols, indices)):
             try:
                 self.loss[key] = np.append(self.loss[key], value)
             except KeyError:
                 self.loss[key] = np.array(value)
         
     def error_rate(self, 
-                 xamp: torch.Tensor, 
+                 xmap: torch.Tensor,
+                 xmmse: torch.Tensor, 
                  x: torch.Tensor,
                  symbols: np.ndarray = None,
                  indices: np.ndarray = None
@@ -74,15 +80,14 @@ class Loss:
         Returns:
             _type_: _description_
         """
-        xamp, x = xamp.cpu().view(-1, self.Lin, self.Nt).numpy(), x.cpu().view(-1, self.Lin, self.Nt).numpy()
-        xhat, shat, ihat = self.decision(xamp)
+        xmap = xmap.cpu().view(-1, self.Lin, self.Nt).numpy()
+        xmmse = xmmse.cpu().view(-1, self.Lin, self.Nt).numpy()
+        x = x.cpu().view(-1, self.Lin, self.Nt).numpy()
+        xhat, shat, ihat = self.decision(xmap)
         xhat = xhat.reshape((-1, self.Lin, self.Nt))
         
-        # measured mean Square Error
-        mMSE = np.sum(np.abs(xamp - x)**2) / self.Ns
-        
-        # predicted mean square error
-        pMSE, pMSEf, pMSEm, pMSEL = self.mean_square_error(xhat, x)
+        # normalized mean square error
+        nMSE, nMSEf, nMSEm, nMSEL = self.mean_square_error(xmmse, x)
         
         # Section Error
         ver, verf, verm, verL = self.vector_error_rate(xhat, x)
@@ -93,7 +98,7 @@ class Loss:
         # bit error rate, index error rate, symbol error rate
         ber, iber, sber, ier, ser = self.bit_error_rate(shat, ihat, symbols, indices)
         
-        return fer, mMSE, pMSE, pMSEf, pMSEm, pMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser
+        return fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser
     
     def mean_square_error(self, xhat: np.ndarray, x: np.ndarray):
         # Mean Square Error
@@ -205,7 +210,7 @@ class Loss:
         xhat = np.zeros_like(xamp)
         xgray = np.zeros_like(xamp, dtype=int)
         for j, x in enumerate(xamp):
-            tmp = np.outer(x.conj(), self.symbols).real
+            tmp = np.outer(x, self.symbols.conj()).real
             idx1, idx2 = np.unravel_index(tmp.argmax(), tmp.shape)
             xhat[j, idx1] = self.symbols[idx2]
             xgray[j, idx1] = self.gray[idx2]
@@ -220,14 +225,13 @@ class Loss:
         self.loss['SNRdB'] = float(SNRdB)
         self.loss['rate'] = float(self.rate)
         self.loss['C'] = float(np.log2(1 + 10**(SNRdB / 10)))
-        
-        for key in self.keys:
-            self.loss[key] = list(self.loss[key])
+        self.loss['ShannonLimitdB'] = float(self.shannon_limt_dB)
         
         with open(f'{save_location}/{EbN0dB}.json', 'w', encoding='utf-8') as f:
             json.dump(self.loss, f, ensure_ascii=False, indent=6, skipkeys=True)
             
         self.loss = {}
+        self.loss['T'] = 0
     
     def accumulate(self, other):
         """_summary_
@@ -235,20 +239,22 @@ class Loss:
         Args:
             other (_type_): _description_
         """
+        self.loss['T'] += other.loss['T']
         for key in self.keys:
             try:
                 self.loss[key] += other.loss[key]
             except KeyError:
                 self.loss[key] = other.loss[key]
-            
+    
     def average(self, epochs: int):
         """_summary_
 
         Args:
             epochs (int): _description_
         """
+        self.loss['T'] = self.loss['T'] / epochs
         for key in self.keys:
-            self.loss[key] = list(np.array(self.loss[key]) / epochs)
+            self.loss[key] = np.array(self.loss[key]) / epochs
             
     def dump(self):
         self.loss = {}
