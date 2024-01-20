@@ -53,23 +53,6 @@ class Shrink(nn.Module):
         a[a==0] = self.tol
         return a
     
-    def sparc(self, s: np.ndarray, tau: np.ndarray) -> np.ndarray:
-        """_summary_
-
-        Args:
-            w (np.ndarray): _description_
-
-        Returns:
-            np.ndarray: _description_
-        """
-        s = s.reshape((-1, self.Nt, 1))
-        tau = self.repeat_vector(tau, self.Nt).reshape((-1, self.Nt, 1))
-        x = np.tile(s / tau, (1, 1, self.K))
-        eta = np.exp(self.expthreshold(np.real(x*self.symbols.conjugate())))
-        eta2 = self.symbols * eta
-        xamp = eta2.sum(axis=2) / eta.sum(axis=2).sum(axis=1, keepdims=True)
-        return xamp.reshape(-1, 1)
-    
     def bayes(self, 
                   r: torch.Tensor, 
                   cov: torch.Tensor

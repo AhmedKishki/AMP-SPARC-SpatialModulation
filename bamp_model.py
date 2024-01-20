@@ -25,7 +25,7 @@ class Model(nn.Module):
         self.loss = Loss(config)
         self.channel = Channel(config)
         self.data = Data(config)
-        self.path = f'Simulations/BAMP/{config.name}'
+        self.path = f'Simulations/BAMP2/{config.name}'
         os.makedirs(self.path, exist_ok=True)
         
         # with open(f'{self.path}/config.json', 'w', encoding='utf-8') as f:
@@ -61,28 +61,35 @@ class Model(nn.Module):
             self.loss.export(SNRdB, EbN0dB, self.path)
 
 if __name__ == "__main__":
-    Nt = 128
-    Nr = 32
-    Lin = 20
+    alph = 'OOK'
+    Nt = 1344
+    Na = 84
+    Nr = 73
+    Lin = 32
+    Lh = 6
+    # Nt = 128
+    # Na = 1
+    # Nr = 32
+    # Lin = 20
+    # Lh = 3
     for trunc in ['tail']:
-        for alph in ['OOK','BPSK','QPSK','8PSK']:
-            for Na in [1, 2, 4]:
-                for Lh in [3, 5]:
-                    for prof in ['uniform']:
-                        for gen in ['segmented']:
-                            config = Config(
-                                            N_transmit_antenna=Nt,
-                                            N_active_antenna=Na,
-                                            N_receive_antenna=Nr,
-                                            block_length=Lin,
-                                            channel_length=Lh,
-                                            channel_truncation=trunc,
-                                            alphabet=alph, 
-                                            channel_profile=prof,
-                                            generator_mode=gen,
-                                            batch=1,
-                                            iterations=200
-                                            )
-                            print(config.__dict__)
-                            Model(config).simulate(epochs=10_000, step=0.25, final=7, start=5, res=50)
-                            Plotter(config, 'BAMP').plot_metrics()
+        for prof in ['uniform']:
+            for gen in ['segmented']:
+                config = Config(
+                                N_transmit_antenna=Nt,
+                                N_active_antenna=Na,
+                                N_receive_antenna=Nr,
+                                block_length=Lin,
+                                channel_length=Lh,
+                                channel_truncation=trunc,
+                                alphabet=alph, 
+                                channel_profile=prof,
+                                generator_mode=gen,
+                                batch=1,
+                                iterations=200
+                                )
+                print(config.__dict__)
+                model = Model(config)
+                model.simulate(epochs=1000, step=0.25, final=9, start=8.5, res=100)
+                model.simulate(epochs=10_000, step=0.25, final=10, start=9.25, res=1000)
+                Plotter(config, 'BAMP2').plot_metrics()

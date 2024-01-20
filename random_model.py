@@ -34,7 +34,7 @@ class Model(nn.Module):
         x, s, i = self.data.generate_message()
         H = self.channel.generate_as_random()
         y = H @ x + self.channel.awgn(SNR)
-        loss = self.BAMP(x, y, H, SNR, s, i)
+        loss = self.AMP(x, y, H, SNR, s, i)
         print(loss.loss)
         return loss
     
