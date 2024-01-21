@@ -111,7 +111,7 @@ class Loss:
         return pMSE, pMSEf, pMSEm, pMSEL
     
     def vector_error_rate(self, xhat: np.ndarray, x: np.ndarray):
-        # vector Error
+        # Block Error Rate
         ver = (np.count_nonzero(xhat.reshape((-1, self.Nt)) - x.reshape((-1, self.Nt)), axis=-1) > 0).sum() / self.Lin / self.B
         verf = (np.count_nonzero(xhat[:, 0] - x[:, 0], axis=-1) > 0).sum() / self.B
         verm = (np.count_nonzero(xhat[:, self.Lin//2] - x[:, self.Lin//2], axis=-1) > 0).sum() / self.B
@@ -119,7 +119,7 @@ class Loss:
         return ver, verf, verm, verL
     
     def frame_error_rate(self, xhat: np.ndarray, x: np.ndarray):
-        # Frame Error
+        # Frame Error Rate
         fer = (np.count_nonzero(xhat.reshape(self.B, -1) - x.reshape(self.B, -1), axis=-1) > 0).sum() / self.B
         return fer
     

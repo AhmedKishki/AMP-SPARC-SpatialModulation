@@ -82,7 +82,7 @@ if __name__ == "__main__":
                                 block_length=Lin,
                                 channel_length=Lh,
                                 channel_truncation=trunc,
-                                alphabet=alph, 
+                                alphabet=alph,
                                 channel_profile=prof,
                                 generator_mode=gen,
                                 batch=1,
@@ -90,6 +90,5 @@ if __name__ == "__main__":
                                 )
                 print(config.__dict__)
                 model = Model(config)
-                model.simulate(epochs=1000, step=0.25, final=9, start=8.5, res=100)
-                model.simulate(epochs=10_000, step=0.25, final=10, start=9.25, res=1000)
+                model.simulate(epochs=10_000, step=0.25, final=11, start=10.25, res=1000)
                 Plotter(config, 'BAMP2').plot_metrics()

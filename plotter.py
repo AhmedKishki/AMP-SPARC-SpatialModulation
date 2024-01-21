@@ -27,7 +27,7 @@ class Plotter:
                     self.N += 1
                     
     def plot_metrics(self):
-        EbN0, limit, fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser = self.get_metrics()
+        EbN0, limit, fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser, iter = self.get_metrics()
         sort = EbN0.argsort()
         EbN0 = EbN0[sort]
         ver_best = np.min(ver, axis=1)[sort]
@@ -36,19 +36,21 @@ class Plotter:
         ber_best = np.min(ber, axis=1)[sort]
         
         plt.figure(figsize=(8, 6))
-        plt.axvline(x = limit, color = 'black', label = 'Shannon Limit')
-        plt.semilogy(EbN0, ver_best, label='VER', color='orange')
+        plt.rcParams['text.usetex'] = True
         plt.semilogy(EbN0, fer_best, label='FER', color='blue')
+        plt.semilogy(EbN0, ver_best, label='VER', color='orange')
         plt.semilogy(EbN0, nMSE_best, label='NMSE', color='red')
         plt.semilogy(EbN0, ber_best, label='BER', color='green')
-        plt.xlabel('EbN0_dB')
-        plt.title(f'{self.alphabet} VER, FER, MSE, BER plot')
+        plt.axvline(x = limit, color = 'black', label = 'Shannon Limit')
+        plt.xlabel(r'$E_b/N_0$ (dB)')
+        plt.title(f'{self.alphabet} Nt={self.Nt} Na={self.Na} Nr={self.Nr} L={self.Lin} Lh={self.Lh}')
         plt.legend()
         plt.grid(True)
         plt.savefig(f'{self.dir}/{self.name}_plot.png')
     
     def get_metrics(self):
         EbN0 = np.zeros(self.N)
+        iter = np.zeros(self.N)
         fer = np.zeros((self.N, self.iterations))
         ver = np.zeros((self.N, self.iterations))
         verf = np.zeros((self.N, self.iterations))
@@ -66,6 +68,7 @@ class Plotter:
         
         for i, sim in self.sim.items():
             EbN0[i] = sim['EbN0dB']
+            iter[i] = sim['T']
             fer[i] = sim['fer']
             ver[i] = sim['ver']
             verf[i] = sim['verf']
@@ -82,7 +85,7 @@ class Plotter:
             nMSEL[i] = sim['nMSEL']
         limit = sim['ShannonLimitdB']
             
-        return EbN0, limit, fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser 
+        return EbN0, limit, fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser, iter
     
 if __name__ == "__main__":
     Nt = 128
