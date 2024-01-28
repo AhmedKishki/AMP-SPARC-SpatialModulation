@@ -25,7 +25,7 @@ class Model(nn.Module):
         self.loss = Loss(config)
         self.channel = Channel(config)
         self.data = Data(config)
-        self.path = f'Simulations/BAMP2/{config.name}'
+        self.path = f'Simulations/BAMP/{config.name}'
         os.makedirs(self.path, exist_ok=True)
         
         # with open(f'{self.path}/config.json', 'w', encoding='utf-8') as f:
@@ -40,38 +40,39 @@ class Model(nn.Module):
         print(loss.loss)
         return loss
     
-    def simulate(self, epochs: int, final = 10, start = None, step: float = 1, res: int = 1):
+    def simulate(self, epochs: int, final = None, start = None, step: float = 1, res: int = 1):
         if start is None:
             start = self.min_snr
+        if final is None:
+            final = start + 10.0
         EbN0dB_range = np.arange(start, final+step, step)
         SNRdB_range = EbN0dB_range + 10*np.log10(self.rate)
         for SNRdB, EbN0dB in zip(SNRdB_range, EbN0dB_range):
             SNR = 10 ** ( SNRdB / 10)
             for i in range(epochs):
-                print(f'EbN0dB={EbN0dB}, epoch={i}')
                 if i % res == 0:
                     H = self.channel.generate_channel()
                 x, s, i = self.data.generate_message()
                 y = H @ x + self.channel.awgn(SNR)
                 loss = self.amp(H, y, SNR, x, s, i)
                 self.loss.accumulate(loss)
-                print(f"FER={loss.loss['fer']}, iter={loss.loss['T']}")
             self.loss.average(epochs)
-            print(self.loss.loss)
+            print(f'EbN0dB={EbN0dB}')
+            print(f"FER={self.loss.loss['fer']}, iter={self.loss.loss['T']}")
             self.loss.export(SNRdB, EbN0dB, self.path)
 
 if __name__ == "__main__":
     alph = 'OOK'
-    Nt = 1344
-    Na = 84
-    Nr = 73
-    Lin = 32
-    Lh = 6
-    # Nt = 128
-    # Na = 1
-    # Nr = 32
-    # Lin = 20
-    # Lh = 3
+    # Nt = 1344
+    # Na = 84
+    # Nr = 73
+    # Lin = 32
+    # Lh = 6
+    Nt = 128
+    Na = 8
+    Nr = 24
+    Lin = 20
+    Lh = 3
     for trunc in ['tail']:
         for prof in ['uniform']:
             for gen in ['segmented']:
@@ -90,5 +91,6 @@ if __name__ == "__main__":
                                 )
                 print(config.__dict__)
                 model = Model(config)
-                model.simulate(epochs=10_000, step=0.25, final=11, start=10.25, res=1000)
-                Plotter(config, 'BAMP2').plot_metrics()
+                model.simulate(epochs=10_000, step=0.25, start=8.25, final=10.0, res=1000)
+                Plotter(config, 'BAMP').plot_iter()
+                Plotter(config, 'BAMP').plot_metrics()

@@ -166,7 +166,7 @@ class Loss:
         return xhat, symbol, index
     
     def segmented_decision(self, xamp: np.ndarray) -> Tuple[np.ndarray]:
-        xamp = xamp.reshape(-1, self.Nt // self.Na)
+        xamp = xamp.reshape(self.Na * self.Lin, self.Nt // self.Na)
         xhat = np.zeros_like(xamp)
         xgray = np.zeros_like(xamp, dtype=int)
         for j, x in enumerate(xamp):
@@ -187,7 +187,7 @@ class Loss:
         return xhat, symbol, index
     
     def random_decision(self, xamp: np.ndarray) -> Tuple[np.ndarray]:
-        xamp = xamp.reshape(-1, self.Nt)
+        xamp = xamp.reshape(self.Na * self.Lin, self.Nt // self.Na)
         xhat = np.zeros_like(xamp)
         xgray = np.zeros_like(xamp, dtype=int)
         for j, x in enumerate(xamp):

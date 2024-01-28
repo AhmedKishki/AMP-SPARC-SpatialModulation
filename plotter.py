@@ -36,17 +36,31 @@ class Plotter:
         ber_best = np.min(ber, axis=1)[sort]
         
         plt.figure(figsize=(8, 6))
-        plt.rcParams['text.usetex'] = True
         plt.semilogy(EbN0, fer_best, label='FER', color='blue')
         plt.semilogy(EbN0, ver_best, label='VER', color='orange')
         plt.semilogy(EbN0, nMSE_best, label='NMSE', color='red')
         plt.semilogy(EbN0, ber_best, label='BER', color='green')
         plt.axvline(x = limit, color = 'black', label = 'Shannon Limit')
-        plt.xlabel(r'$E_b/N_0$ (dB)')
+        plt.xlabel('$E_b/N_0$ (dB)')
         plt.title(f'{self.alphabet} Nt={self.Nt} Na={self.Na} Nr={self.Nr} L={self.Lin} Lh={self.Lh}')
         plt.legend()
         plt.grid(True)
         plt.savefig(f'{self.dir}/{self.name}_plot.png')
+        
+    def plot_iter(self):
+        EbN0, limit, fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser, iter = self.get_metrics()
+        sort = EbN0.argsort()
+        EbN0 = EbN0[sort]
+        iter = iter[sort]
+        plt.figure(figsize=(8, 6))
+        plt.plot(EbN0, iter, label='iterations', color='blue')
+        plt.axvline(x = limit, color = 'black', label = 'Shannon Limit')
+        plt.xlabel('$E_b/N_0$ (dB)')
+        plt.ylabel('Iterations')
+        plt.title(f'{self.alphabet} Nt={self.Nt} Na={self.Na} Nr={self.Nr} L={self.Lin} Lh={self.Lh}')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(f'{self.dir}/{self.name}_iter_plot.png')
     
     def get_metrics(self):
         EbN0 = np.zeros(self.N)
@@ -88,25 +102,4 @@ class Plotter:
         return EbN0, limit, fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser, iter
     
 if __name__ == "__main__":
-    Nt = 128
-    Nr = 32
-    Lin = 20
-    for trunc in ['tail']:
-        for Lh in [3]:
-            for Na in [1, 2, 4]:
-                for alph in ['OOK','BPSK','QPSK','8PSK','16PSK']:
-                    for prof in ['uniform']:
-                        for gen in ['sparc']:
-                            config = Config(
-                                            N_transmit_antenna=Nt,
-                                            N_active_antenna=Na,
-                                            N_receive_antenna=Nr,
-                                            block_length=Lin,
-                                            channel_length=Lh,
-                                            channel_truncation=trunc,
-                                            alphabet=alph,
-                                            channel_profile=prof,
-                                            generator_mode=gen
-                                            )
-                            print(config.__dict__)
-                            Plotter(config).plot_metrics()
+    pass

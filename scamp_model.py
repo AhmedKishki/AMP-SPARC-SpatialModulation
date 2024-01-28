@@ -47,46 +47,47 @@ class Model(nn.Module):
         for SNRdB, EbN0dB in zip(SNRdB_range, EbN0dB_range):
             SNR = 10 ** ( SNRdB / 10)
             for i in range(epochs):
-                print(f'EbN0dB={EbN0dB}, epoch={i}')
                 if i % res == 0:
                     W, A = self.channel.generate_as_sparc()
                 x, s, i = self.data.generate_message()
                 y = A @ x + self.channel.awgn(SNR)
                 loss = self.amp(W, A, y, SNR, x, s, i)
                 self.loss.accumulate(loss)
-                print(f"FER={loss.loss['fer']}, iter={loss.loss['T']}")
             self.loss.average(epochs)
-            print(self.loss.loss)
+            print(f'EbN0dB={EbN0dB}')
+            print(f"FER={self.loss.loss['fer']}, iter={self.loss.loss['T']}")
             self.loss.export(SNRdB, EbN0dB, self.path)
 
 if __name__ == "__main__":
-    # Na = 84
-    # Nr = 73
+    alph = 'OOK'
+    Nt = 1344
     Na = 84
     Nr = 73
     Lin = 32
+    Lh = 6
+    # Nt = 128
+    # Na = 8
+    # Nr = 24
+    # Lin = 20
+    # Lh = 3
     for trunc in ['tail']:
-        for Lh in [6]:
-            for (Nt, alph) in [(336,'QPSK')]:
-                for prof in ['uniform']:
-                    for gen in ['sparc']:
-                        config = Config(
-                                        N_transmit_antenna=Nt,
-                                        N_active_antenna=Na,
-                                        N_receive_antenna=Nr,
-                                        block_length=Lin,
-                                        channel_length=Lh,
-                                        channel_truncation=trunc,
-                                        alphabet=alph,
-                                        channel_profile=prof,
-                                        generator_mode=gen,
-                                        batch=1,
-                                        iterations=200
-                                        )
-                        print(config.__dict__)
-                        model = Model(config)
-                        # model.simulate(epochs=10_000, step=0.25, final=10, start=7, res=1000)
-                        model.simulate(epochs=1000, step=0.25, final=9.0, start=3.5, res=100)
-                        # model.simulate(epochs=1000, step=0.25, final=9, start=8.25, res=100)
-                        # model.simulate(epochs=10_000, step=0.25, final=10, start=9.25, res=1000)
-                        Plotter(config, 'SCAMP').plot_metrics()
+        for prof in ['uniform']:
+            for gen in ['sparc']:
+                config = Config(
+                                N_transmit_antenna=Nt,
+                                N_active_antenna=Na,
+                                N_receive_antenna=Nr,
+                                block_length=Lin,
+                                channel_length=Lh,
+                                channel_truncation=trunc,
+                                alphabet=alph,
+                                channel_profile=prof,
+                                generator_mode=gen,
+                                batch=1,
+                                iterations=200
+                                )
+                print(config.__dict__)
+                model = Model(config)
+                # model.simulate(epochs=1000, step=1, final=6.0, res=100)
+                Plotter(config, 'SCAMP').plot_iter()
+                Plotter(config, 'SCAMP').plot_metrics()

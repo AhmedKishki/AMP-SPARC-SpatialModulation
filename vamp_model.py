@@ -1,5 +1,6 @@
 import os
 
+import json
 import torch
 from torch import nn
 import numpy as np
@@ -9,75 +10,88 @@ from data import Data
 from channel import Channel
 from loss import Loss
 from vamp import VAMP
+from plotter import Plotter
 
 
 class Model(nn.Module):
     def __init__(self, config: Config) -> None:
-        """_summary_
-
-        Args:
-            config (Config): _description_
-        """
         super().__init__()
         
         # build
-        self.config = config
-        self.VAMP = VAMP(config).to(config.device)
+        self.rate = config.code_rate
+        self.shannon_limit = config.shannon_limit_dB
+        self.min_snr = int(np.floor(self.shannon_limit))
+        self.amp = VAMP(config).to(config.device)
+        self.loss = Loss(config)
         self.channel = Channel(config)
         self.data = Data(config)
-        self.path = 'Simulations/VAMP/' + f'{config.name}'
+        self.path = f'Simulations/VAMP/{config.name}'
         os.makedirs(self.path, exist_ok=True)
         
+        # with open(f'{self.path}/config.json', 'w', encoding='utf-8') as f:
+        #     json.dump(config.__dict__, f, ensure_ascii=F  alse, indent=6, skipkeys=True)
+
     @torch.no_grad()
-    def run(self, SNRdB: float) -> Loss:
-        """_summary_
-
-        Args:
-            SNRdB (float): _description_
-
-        Returns:
-            Loss: _description_
-        """
-        SNR = 10 ** ( SNRdB / 10)
-        self.channel.generate_channel()
-        x = self.data.generate()
-        y = self.channel(x, SNR)
-        loss = self.VAMP(x, y, self.channel)
-        print(SNRdB, loss.SER)
+    def run(self, SNR: float) -> Loss:
+        x, s, i = self.data.generate_message()
+        H = self.channel.generate_channel()
+        y = H @ x + self.channel.awgn(SNR)
+        loss = self.amp(x, y, H, SNR, s, i)
+        print(loss.loss)
         return loss
     
-    def simulate(self, epochs: int, start: float, final: float, step: float = 1):
-        """_summary_
-
-        Args:
-            epochs (int): _description_
-            start (float): _description_
-            final (float): _description_
-            step (float, optional): _description_. Defaults to 1.
-        """
-        SNRdB_range = np.arange(start, final+step, step)
-        loss = Loss(config)
-        for SNRdB in SNRdB_range:
-            loss.dump()
+    def simulate(self, epochs: int, final = None, start = None, step: float = 1, res: int = 1):
+        if start is None:
+            start = self.min_snr
+        if final is None:
+            final = start + 10.0
+        EbN0dB_range = np.arange(start, final+step, step)
+        SNRdB_range = EbN0dB_range + 10*np.log10(self.rate)
+        for SNRdB, EbN0dB in zip(SNRdB_range, EbN0dB_range):
+            SNR = 10 ** ( SNRdB / 10)
             for i in range(epochs):
-                print(SNRdB, i)
-                loss.collect(self.run(SNRdB))
-            loss.average(epochs)
-            loss.export(f"SNRdB={str(SNRdB).replace('.', ',')}", self.path)
+                if i % res == 0:
+                    H = self.channel.generate_channel()
+                    U, s, Vh = torch.linalg.svd(H, full_matrices=False)
+                x, sym, idx = self.data.generate_message()
+                y = H @ x + self.channel.awgn(SNR)
+                loss = self.amp(U, s, Vh, y, SNR, x, sym, idx)
+                self.loss.accumulate(loss)
+            self.loss.average(epochs)
+            print(f'EbN0dB={EbN0dB}')
+            print(f"FER={self.loss.loss['fer']}, iter={self.loss.loss['T']}")
+            self.loss.export(SNRdB, EbN0dB, self.path)
 
 if __name__ == "__main__":
-    Nt = 100
-    Na = 5
-    Nr = 30
-    lb = 20
-    lh = 3
-    config = Config(batch=100,
-                    N_transmit_antenna=Nt,
-                    N_active_antenna=Na,
-                    N_receive_antenna=Nr,
-                    block_length=lb,
-                    channel_length=lh,
-                    iterations=20,
-                    alphabet='OOK')
-    model = Model(config)
-    model.simulate(100, 10, 20, 1)
+    alph = 'OOK'
+    # Nt = 1344
+    # Na = 84
+    # Nr = 73
+    # Lin = 32
+    # Lh = 6
+    Nt = 128
+    Na = 8
+    Nr = 24
+    Lin = 20
+    Lh = 3
+    for trunc in ['tail']:
+        for prof in ['uniform']:
+            for gen in ['segmented']:
+                config = Config(
+                                N_transmit_antenna=Nt,
+                                N_active_antenna=Na,
+                                N_receive_antenna=Nr,
+                                block_length=Lin,
+                                channel_length=Lh,
+                                channel_truncation=trunc,
+                                alphabet=alph,
+                                channel_profile=prof,
+                                generator_mode=gen,
+                                batch=1,
+                                iterations=50
+                                )
+                print(config.__dict__)
+                model = Model(config)
+                model.simulate(epochs=100, step=1, start=15.0, final=20.0, res=100)
+                Plotter(config, 'VAMP').plot_iter()
+                Plotter(config, 'VAMP').plot_metrics()
