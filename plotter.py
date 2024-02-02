@@ -42,6 +42,7 @@ class Plotter:
         plt.semilogy(EbN0, ber_best, label='BER', color='green')
         plt.axvline(x = limit, color = 'black', label = 'Shannon Limit')
         plt.xlabel('$E_b/N_0$ (dB)')
+        plt.ylabel('error rate')
         plt.title(f'{self.alphabet} Nt={self.Nt} Na={self.Na} Nr={self.Nr} L={self.Lin} Lh={self.Lh}')
         plt.legend()
         plt.grid(True)

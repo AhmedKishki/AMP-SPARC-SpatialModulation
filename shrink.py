@@ -14,9 +14,9 @@ class Shrink(nn.Module):
             shrink_fn (str): _description_
         """
         super().__init__()
-        assert shrink_fn in ["bayes", "shrink", "lasso"], "shrink_fn needs to be 'bayes' or 'shrink' or 'lasso'"
+        assert shrink_fn in ["bayes", "shrink", "lasso", "shrinkOOK"], "shrink_fn needs to be ..."
          
-        self.Ps, self.P0 = config.Ps, config.P0
+        self.Ps, self.P0 = torch.tensor(config.Ps), torch.tensor(config.P0)
         
         if config.is_complex:
             self.dtype = torch.complex64
@@ -25,7 +25,7 @@ class Shrink(nn.Module):
         
         self.symbols = torch.tensor(config.symbols, device=config.device, dtype=self.dtype)
         self.symbols2 = torch.abs(self.symbols)**2
-        self.tol = 1e-15
+        self.tol = torch.tensor(1.0e-9)
         
         if shrink_fn == "bayes":
             self.shrinkage = self.bayes
@@ -33,6 +33,8 @@ class Shrink(nn.Module):
             self.shrinkage = self.shrink
         elif shrink_fn == "lasso":
             self.shrinkage = self.lasso
+        elif shrink_fn == "shrinkOOK":
+            self.shrinkage = self.shrinkOOK
         
     def forward(self, 
                   r: torch.Tensor, 
@@ -49,8 +51,13 @@ class Shrink(nn.Module):
         """
         return self.shrinkage(r, cov)
     
-    def regularize(self, a):
-        a[a==0] = self.tol
+    def regularize_zero(self, a):
+        a[a==0.] = self.tol
+        return a
+    
+    def regularize_exp(self, a: torch.Tensor):
+        max = np.log(torch.finfo(a.dtype).max)
+        a[a>=max] = max - 1
         return a
     
     def bayes(self, 
@@ -68,7 +75,7 @@ class Shrink(nn.Module):
         """
         G = lambda s: torch.exp(- torch.abs(r - s)**2 / cov )
         G0, Gs = G(0), G(self.symbols)
-        norm = self.regularize(self.P0 * G0 + self.Ps * torch.sum(Gs, dim=-1).unsqueeze(-1))
+        norm = self.regularize_zero(self.P0 * G0 + self.Ps * torch.sum(Gs, dim=-1).unsqueeze(-1))
         exp = self.Ps * torch.sum(self.symbols * Gs, dim=-1).unsqueeze(-1) / norm
         var = self.Ps * torch.sum(self.symbols2 * Gs, dim=-1).unsqueeze(-1) / norm - torch.abs(exp)**2
         return exp, var.to(torch.float32)
@@ -128,7 +135,8 @@ class Shrink(nn.Module):
             Tuple[torch.Tensor, torch.Tensor]: _description_
         """
         theta = torch.log(self.P0 / self.Ps)
-        eta = torch.exp(theta + (1 - 2*r) / cov)
+        eta = torch.exp(self.regularize_exp(theta + (1 - 2*r.real) / cov))
         exp = 1 / (1 + eta + self.tol)
-        der = 2 * eta * exp**2 / (cov + self.tol)
-        return exp, der
+        der = torch.nan_to_num(2 * eta * exp**2 / cov, nan=0.0)
+        dxdr = der.mean()
+        return exp, dxdr

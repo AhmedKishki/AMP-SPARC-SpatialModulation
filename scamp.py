@@ -40,7 +40,7 @@ class SCAMPLayer(nn.Module):
         self.K = config.K
         self.symbols = torch.tensor(config.symbols, device=config.device)
         
-    def forward(self, T: Tracker) -> torch.Tensor:
+    def forward(self, T: Tracker) -> None:
         # Residual var - noise var (length Lr)
         gma = T.W @ T.psi / self.Lc # B, Lr, 1
         # Modified residual z

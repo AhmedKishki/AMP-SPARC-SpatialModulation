@@ -101,12 +101,11 @@ class BAMP(nn.Module):
         T = Tracker(x, y, H, self.E / SNR)
         self.L.dump()
         for t, layer in enumerate(self.layers):
-            var_prev = T.var
+            prev = T.var
             layer(T)
-            var_next = T.var
-            if torch.allclose(var_next, var_prev):
+            next = T.var
+            if torch.allclose(next, prev):
                 break
-        np.savetxt('xmap.txt', T.xmap.view(-1).cpu().numpy())
         self.L(T.xmap, T.xmmse, x, symbols, indices, t+1)
         return self.L
     

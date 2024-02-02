@@ -13,7 +13,7 @@ from vamp import VAMP
 from plotter import Plotter
 
 
-class Model(nn.Module):
+class Model:
     def __init__(self, config: Config) -> None:
         super().__init__()
         
@@ -40,6 +40,7 @@ class Model(nn.Module):
         print(loss.loss)
         return loss
     
+    @torch.no_grad()
     def simulate(self, epochs: int, final = None, start = None, step: float = 1, res: int = 1):
         if start is None:
             start = self.min_snr
@@ -48,6 +49,7 @@ class Model(nn.Module):
         EbN0dB_range = np.arange(start, final+step, step)
         SNRdB_range = EbN0dB_range + 10*np.log10(self.rate)
         for SNRdB, EbN0dB in zip(SNRdB_range, EbN0dB_range):
+            print(f'EbN0dB={EbN0dB}')
             SNR = 10 ** ( SNRdB / 10)
             for i in range(epochs):
                 if i % res == 0:
@@ -58,7 +60,6 @@ class Model(nn.Module):
                 loss = self.amp(U, s, Vh, y, SNR, x, sym, idx)
                 self.loss.accumulate(loss)
             self.loss.average(epochs)
-            print(f'EbN0dB={EbN0dB}')
             print(f"FER={self.loss.loss['fer']}, iter={self.loss.loss['T']}")
             self.loss.export(SNRdB, EbN0dB, self.path)
 
@@ -88,10 +89,10 @@ if __name__ == "__main__":
                                 channel_profile=prof,
                                 generator_mode=gen,
                                 batch=1,
-                                iterations=50
+                                iterations=10
                                 )
                 print(config.__dict__)
                 model = Model(config)
-                model.simulate(epochs=100, step=1, start=15.0, final=20.0, res=100)
+                model.simulate(epochs=100, step=1, final=20.0, res=100)
                 Plotter(config, 'VAMP').plot_iter()
                 Plotter(config, 'VAMP').plot_metrics()

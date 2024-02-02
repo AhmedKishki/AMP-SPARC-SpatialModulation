@@ -18,8 +18,9 @@ class Tracker:
         self.Vh = Vh
         self.V = Vh.adjoint()
         self.noise_var = sigma2
+        self.sigma2 = torch.tensor(sigma2)
         self.y_tilde = self.Uh @ y / s.view(-1, 1)
-        self.xmap = torch.zeros_like(x)
+        self.r = torch.zeros_like(x)
         self.var = torch.ones_like(x, dtype=torch.float32)
         self.r_tilde = torch.ones_like(x) * sparsity
         self.sigma2_tilde = (sparsity)**2 * (1-sparsity) + (1-sparsity)**2 * sparsity
@@ -33,8 +34,11 @@ class VAMPLayer(nn.Module):
             config (Config): _description_
         """
         super().__init__()
-        self.Nt, self.Nr = config.Nt, config.Nr
-        self.denoiser = Shrink(config, 'bayes')
+        self.Nt, self.Na, self.Nr, self.Lin, self.B = config.Nt, config.Na, config.Nr, config.Lin, config.B
+        self.M = self.Nt // self.Na
+        self.L = self.Na * self.Lin
+        # self.denoiser = Shrink(config, 'shrinkOOK')
+        self.denoiser = self.segmented_shrinkage
         
         self.var_ratio_min = torch.tensor(1.0e-5)
         self.var_ratio_max = 1.0 - self.var_ratio_min
@@ -50,7 +54,7 @@ class VAMPLayer(nn.Module):
 
         Returns:
             _type_: _description_
-        """        
+        """
         var_ratio = T.noise_var / T.sigma2_tilde
         q = T.Vh @ T.r_tilde
         scale = 1 / (T.s2 + var_ratio)
@@ -64,26 +68,44 @@ class VAMPLayer(nn.Module):
         alpha = torch.max(alpha, self.var_ratio_min)
         alpha = torch.min(alpha, self.var_ratio_max)
         
-        T.xmap = (x_tilde - alpha * T.r_tilde) / (1 - alpha)
+        T.r = (x_tilde - alpha * T.r_tilde) / (1 - alpha)
         sigma2 = alpha/(1-alpha)*T.sigma2_tilde
         sigma2 = torch.max(sigma2, self.var_min)
         sigma2 = torch.min(sigma2, self.var_max)
         
-        T.xmmse, T.var = self.denoiser(T.xmap, sigma2)
+        T.xmmse, T.var = self.denoiser(T.r, sigma2)
         dxdr = T.var.mean() / sigma2
         dxdr = torch.max(dxdr, self.var_ratio_min)
         dxdr = torch.min(dxdr, self.var_ratio_max)
         
-        T.r_tilde = (T.xmmse - dxdr * T.xmap) / (1 - dxdr)
-        T.sigma2_tilde = sigma2 * dxdr / (1 - dxdr)
+        normScalar = 1 / (1 - dxdr)
+        
+        T.r_tilde = (T.xmmse - dxdr * T.r) * normScalar
+        T.sigma2_tilde = sigma2 * dxdr * normScalar
         T.sigma2_tilde = torch.max(T.sigma2_tilde, self.var_min)
         T.sigma2_tilde = torch.max(T.sigma2_tilde, self.var_min)
+        
+    def segmented_shrinkage(self, r: torch.Tensor, cov: torch.Tensor):
+        Lr = ((2*r.real - 1) / cov).view(self.B, self.L, self.M)
+        exp_Lr = torch.exp(self.regularize(Lr))
+        sum_exp_Lr = exp_Lr.sum(dim=-1, keepdim=True).repeat_interleave(self.M, dim=-1)
+        Le = - torch.log(sum_exp_Lr - exp_Lr)
+        Lx = Lr + Le
+        eta = torch.exp(self.regularize(Lx))
+        Exp = eta / (1 + eta)
+        Var = Exp * (1 - Exp)
+        return Exp.to(torch.complex64).view(self.B, self.L*self.M, 1), Var.to(torch.float32).view(self.B, self.L*self.M, 1)
     
+    def regularize(self, a: torch.Tensor):
+        max = np.log(torch.finfo(a.dtype).max)
+        a[a>=max] = max - 1
+        return a
+        
 class VAMP(nn.Module):
     def __init__(self, config: Config) -> None:
         super().__init__()
-        self.E = config.Na
-        self.sparsity = config.Nt / config.Na
+        self.E = config.Na / config.Nr
+        self.sparsity = config.Na / config.Nt
         self.layers = nn.ModuleList([VAMPLayer(config) for _ in range(config.N_Layers)])
         self.L = Loss(config)
 
@@ -110,6 +132,10 @@ class VAMP(nn.Module):
         T = Tracker(U, s, Vh, y, x, self.E / SNR, self.sparsity)
         self.L.dump()
         for t, layer in enumerate(self.layers):
+            prev = T.var
             layer(T)
-        self.L(T.xmap, T.xmmse, x, symbols, indices, t+1)
+            next = T.var
+            if torch.allclose(next, prev):
+                break
+        self.L(T.r, T.xmmse, x, symbols, indices, t+1)
         return self.L
