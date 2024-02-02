@@ -89,10 +89,12 @@ if __name__ == "__main__":
                                 channel_profile=prof,
                                 generator_mode=gen,
                                 batch=1,
-                                iterations=10
+                                iterations=200
                                 )
                 print(config.__dict__)
                 model = Model(config)
-                model.simulate(epochs=100, step=1, final=20.0, res=100)
+                model.simulate(epochs=100, step=1, final=5.0, res=100)
+                model.simulate(epochs=1000, step=0.5, start=5.5, final=8.0, res=100)
+                model.simulate(epochs=10_000, step=0.25, start=8.5, final=10.0, res=1000)
                 Plotter(config, 'VAMP').plot_iter()
                 Plotter(config, 'VAMP').plot_metrics()

@@ -19,7 +19,7 @@ class Tracker:
         self.V = Vh.adjoint()
         self.noise_var = sigma2
         self.sigma2 = torch.tensor(sigma2)
-        self.y_tilde = self.Uh @ y / s.view(-1, 1)
+        self.y_tilde = s.view(-1, 1) * self.Uh @ y
         self.r = torch.zeros_like(x)
         self.var = torch.ones_like(x, dtype=torch.float32)
         self.r_tilde = torch.ones_like(x) * sparsity
@@ -137,5 +137,5 @@ class VAMP(nn.Module):
             next = T.var
             if torch.allclose(next, prev):
                 break
-        self.L(T.r, T.xmmse, x, symbols, indices, t+1)
+        self.L(T.xmmse, T.xmmse, x, symbols, indices, t+1)
         return self.L
