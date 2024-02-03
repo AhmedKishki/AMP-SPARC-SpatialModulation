@@ -83,7 +83,7 @@ class VAMPLayer(nn.Module):
         T.r_tilde = (T.xmmse - dxdr * T.r) * normScalar
         T.sigma2_tilde = sigma2 * dxdr * normScalar
         T.sigma2_tilde = torch.max(T.sigma2_tilde, self.var_min)
-        T.sigma2_tilde = torch.max(T.sigma2_tilde, self.var_min)
+        T.sigma2_tilde = torch.min(T.sigma2_tilde, self.var_max)
         
     def segmented_shrinkage(self, r: torch.Tensor, cov: torch.Tensor):
         Lr = ((2*r.real - 1) / cov).view(self.B, self.L, self.M)
@@ -137,5 +137,5 @@ class VAMP(nn.Module):
             next = T.var
             if torch.allclose(next, prev):
                 break
-        self.L(T.xmmse, T.xmmse, x, symbols, indices, t+1)
+        self.L(T.r, T.xmmse, x, symbols, indices, t+1)
         return self.L
