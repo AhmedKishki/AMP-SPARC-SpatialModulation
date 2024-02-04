@@ -70,7 +70,7 @@ class VAMPLayer(nn.Module):
         
         T.r = (x_tilde - alpha * T.r_tilde) / (1 - alpha)
         sigma2 = alpha/(1-alpha)*T.sigma2_tilde
-        sigma2 = torch.max(sigma2, self.var_min)
+        sigma2 = torch.max(sigma2, self.var_min) 
         sigma2 = torch.min(sigma2, self.var_max)
         
         T.xmmse, T.var = self.denoiser(T.r, sigma2)
@@ -137,5 +137,8 @@ class VAMP(nn.Module):
             next = T.var
             if torch.allclose(next, prev):
                 break
-        self.L(T.r, T.xmmse, x, symbols, indices, t+1)
+        self.L(T.xmmse, T.xmmse, x, symbols, indices, t+1)
+        # np.savetxt('r.txt', T.r.view(-1).cpu().numpy())
+        # np.savetxt('xmmse.txt', T.xmmse.view(-1).cpu().numpy())
+        # np.savetxt('var.txt', T.var.view(-1).cpu().numpy())
         return self.L

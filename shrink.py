@@ -27,6 +27,10 @@ class Shrink(nn.Module):
         self.symbols2 = torch.abs(self.symbols)**2
         self.tol = torch.tensor(1.0e-9)
         
+        self.M = config.Nt // config.Na
+        self.L = config.Na * config.Lin
+        self.B = config.B
+        
         if shrink_fn == "bayes":
             self.shrinkage = self.bayes
         elif shrink_fn == "shrink":
@@ -51,14 +55,25 @@ class Shrink(nn.Module):
         """
         return self.shrinkage(r, cov)
     
-    def regularize_zero(self, a):
-        a[a==0.] = self.tol
-        return a
-    
-    def regularize_exp(self, a: torch.Tensor):
-        max = np.log(torch.finfo(a.dtype).max)
-        a[a>=max] = max - 1
-        return a
+    def sw_shrinkOOK(self, r: torch.Tensor, cov: torch.Tensor):
+        """_summary_
+
+        Args:
+            r (torch.Tensor): _description_
+            cov (torch.Tensor): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        Lr = ((2*r.real - 1) / cov).view(self.B, self.L, self.M)
+        exp_Lr = torch.exp(self.regularize_exp(Lr))
+        sum_exp_Lr = exp_Lr.sum(dim=-1, keepdim=True).repeat_interleave(self.M, dim=-1)
+        Le = - torch.log(sum_exp_Lr - exp_Lr)
+        Lx = Lr + Le
+        eta = torch.exp(self.regularize_exp(Lx))
+        Exp = eta / (1 + eta)
+        Var = Exp * (1 - Exp)
+        return Exp.to(torch.complex64).view(self.B, self.L*self.M, 1), Var.to(torch.float32).view(self.B, self.L*self.M, 1)
     
     def bayes(self, 
                   r: torch.Tensor, 
@@ -140,3 +155,12 @@ class Shrink(nn.Module):
         der = torch.nan_to_num(2 * eta * exp**2 / cov, nan=0.0)
         dxdr = der.mean()
         return exp, dxdr
+    
+    def regularize_zero(self, a):
+        a[a==0.] = self.tol
+        return a
+    
+    def regularize_exp(self, a: torch.Tensor):
+        max = np.log(torch.finfo(a.dtype).max)
+        a[a>=max] = max - 1
+        return a

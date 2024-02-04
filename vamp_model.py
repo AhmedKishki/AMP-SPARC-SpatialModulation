@@ -20,7 +20,7 @@ class Model:
         # build
         self.rate = config.code_rate
         self.shannon_limit = config.shannon_limit_dB
-        self.min_snr = int(np.floor(self.shannon_limit))
+        self.min_snr = self.shannon_limit
         self.amp = VAMP(config).to(config.device)
         self.loss = Loss(config)
         self.channel = Channel(config)
@@ -43,7 +43,7 @@ class Model:
     @torch.no_grad()
     def simulate(self, epochs: int, final = None, start = None, step: float = 1, res: int = 1):
         if start is None:
-            start = self.min_snr
+            start = int(np.ceil(self.min_snr))
         if final is None:
             final = start + 10.0
         EbN0dB_range = np.arange(start, final+step, step)
@@ -75,7 +75,7 @@ if __name__ == "__main__":
     Nr = 24
     Lin = 20
     Lh = 3
-    for trunc in ['tail']:
+    for trunc in ['trunc']:
         for prof in ['uniform']:
             for gen in ['segmented']:
                 config = Config(
@@ -93,6 +93,6 @@ if __name__ == "__main__":
                                 )
                 print(config.__dict__)
                 model = Model(config)
-                model.simulate(epochs=10_000, step=0.25, start=10.25, final=15.0, res=1000)
+                model.simulate(epochs=100, step=1, start=11.0, final=15.0, res=100)
                 Plotter(config, 'VAMP').plot_iter()
                 Plotter(config, 'VAMP').plot_metrics()

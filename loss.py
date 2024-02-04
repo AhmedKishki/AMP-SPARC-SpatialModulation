@@ -103,6 +103,15 @@ class Loss:
         return fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser
     
     def mean_square_error(self, xhat: np.ndarray, x: np.ndarray):
+        """_summary_
+
+        Args:
+            xhat (np.ndarray): _description_
+            x (np.ndarray): _description_
+
+        Returns:
+            _type_: _description_
+        """
         # Mean Square Error
         pMSE = np.sum(np.abs(xhat - x)**2) / self.Ns
         pMSEf = np.sum(np.abs(xhat[:, 0] - x[:, 0])**2) / self.Na / self.B
@@ -111,6 +120,15 @@ class Loss:
         return pMSE, pMSEf, pMSEm, pMSEL
     
     def vector_error_rate(self, xhat: np.ndarray, x: np.ndarray):
+        """_summary_
+
+        Args:
+            xhat (np.ndarray): _description_
+            x (np.ndarray): _description_
+
+        Returns:
+            _type_: _description_
+        """
         # Block Error Rate
         ver = (np.count_nonzero(xhat.reshape((-1, self.Nt)) - x.reshape((-1, self.Nt)), axis=-1) > 0).sum() / self.Lin / self.B
         verf = (np.count_nonzero(xhat[:, 0] - x[:, 0], axis=-1) > 0).sum() / self.B
@@ -119,11 +137,31 @@ class Loss:
         return ver, verf, verm, verL
     
     def frame_error_rate(self, xhat: np.ndarray, x: np.ndarray):
+        """_summary_
+
+        Args:
+            xhat (np.ndarray): _description_
+            x (np.ndarray): _description_
+
+        Returns:
+            _type_: _description_
+        """
         # Frame Error Rate
         fer = (np.count_nonzero(xhat.reshape(self.B, -1) - x.reshape(self.B, -1), axis=-1) > 0).sum() / self.B
         return fer
     
     def bit_error_rate(self, sym_hat: np.ndarray, ind_hat: np.ndarray, sym: np.ndarray, ind: np.ndarray):
+        """_summary_
+
+        Args:
+            sym_hat (np.ndarray): _description_
+            ind_hat (np.ndarray): _description_
+            sym (np.ndarray): _description_
+            ind (np.ndarray): _description_
+
+        Returns:
+            _type_: _description_
+        """
         ier = np.count_nonzero(ind_hat - ind) / self.Ns
         ser = np.count_nonzero(sym_hat - sym) / self.Ns
         # index bit error rate
@@ -141,6 +179,15 @@ class Loss:
         return ber, iber, sber, ier, ser
     
     def de2bi(self, dec: np.ndarray, bits: int):
+        """_summary_
+
+        Args:
+            dec (np.ndarray): _description_
+            bits (int): _description_
+
+        Returns:
+            _type_: _description_
+        """
         dec = dec.astype(int)
         bi = np.zeros((len(dec), bits), dtype=int)
         for i in range(bits):
@@ -149,6 +196,14 @@ class Loss:
         return np.flip(bi, axis=1).ravel()
             
     def dumb_decision(self, xamp: np.ndarray) -> Tuple[np.ndarray]:
+        """_summary_
+
+        Args:
+            xamp (np.ndarray): _description_
+
+        Returns:
+            Tuple[np.ndarray]: _description_
+        """
         xamp = xamp.ravel()
         index = np.sort(np.abs(xamp).argsort()[-self.Ns:])
         symbol = np.zeros_like(index)
@@ -166,6 +221,14 @@ class Loss:
         return xhat, symbol, index
     
     def segmented_decision(self, xamp: np.ndarray) -> Tuple[np.ndarray]:
+        """_summary_
+
+        Args:
+            xamp (np.ndarray): _description_
+
+        Returns:
+            Tuple[np.ndarray]: _description_
+        """
         xamp = xamp.reshape(self.Na * self.Lin, self.Nt // self.Na)
         xhat = np.zeros_like(xamp)
         xgray = np.zeros_like(xamp, dtype=int)
@@ -187,6 +250,14 @@ class Loss:
         return xhat, symbol, index
     
     def random_decision(self, xamp: np.ndarray) -> Tuple[np.ndarray]:
+        """_summary_
+
+        Args:
+            xamp (np.ndarray): _description_
+
+        Returns:
+            Tuple[np.ndarray]: _description_
+        """
         xamp = xamp.reshape(self.Na * self.Lin, self.Nt // self.Na)
         xhat = np.zeros_like(xamp)
         xgray = np.zeros_like(xamp, dtype=int)
@@ -208,6 +279,14 @@ class Loss:
         return xhat, symbol, index
     
     def MAP_decision(self, xamp: np.ndarray) -> Tuple[np.ndarray]:
+        """_summary_
+
+        Args:
+            xamp (np.ndarray): _description_
+
+        Returns:
+            Tuple[np.ndarray]: _description_
+        """
         xamp = xamp.reshape(-1, self.Nt // self.Na)
         xhat = np.zeros_like(xamp)
         xgray = np.zeros_like(xamp, dtype=int)
@@ -222,6 +301,13 @@ class Loss:
         return xhat, symbol, index
             
     def export(self, SNRdB: float, EbN0dB: float, save_location: str) -> None:
+        """_summary_
+
+        Args:
+            SNRdB (float): _description_
+            EbN0dB (float): _description_
+            save_location (str): _description_
+        """
 
         self.loss['EbN0dB'] = float(EbN0dB)
         self.loss['SNRdB'] = float(SNRdB)
