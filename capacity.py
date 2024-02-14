@@ -31,6 +31,7 @@ class Capacity:
             final = start + 10.0
         EbN0dB_range = np.arange(start, final+step, step)
         SNRdB_range = EbN0dB_range + 10*np.log10(self.rate)
+        x = np.ones(self.n)*np.sqrt(self.Na / self.Nt)
         capacity = []
         for SNRdB, EbN0dB in zip(SNRdB_range, EbN0dB_range):
             print(f'EbN0dB={EbN0dB}')
@@ -42,6 +43,8 @@ class Capacity:
                 H = self.channel.generate_channel()
                 g = torch.linalg.svdvals(H).numpy()**2
                 Pwf = self.water_filling(g, sigma2)
+                print(self.Na / self.Nr)
+                print(np.sum(Pwf*g))
                 Cwf = np.max([Cfs, np.sum(np.log2(1 + g * Pwf / sigma2))])
             capacity.append([Cawgn, Cwf])
             print(f'Cawgn: {Cawgn}, Cwf: {Cwf}')
@@ -50,7 +53,7 @@ class Capacity:
         pd.DataFrame(Cdict).to_csv(f'{self.path}/{config.Nt,config.Na,config.Nr,config.Lh}.csv')
         return capacity
     
-    def water_filling(self, gain: np.ndarray, sigma2: float):
+    def water_filling(self, gain: np.ndarray, sigma2: float) -> np.ndarray:
         """
         Calculates the water level that touches the worst channel (the higher
         one) and therefore transmits zero power in this worst channel. After
@@ -64,7 +67,7 @@ class Capacity:
         Calculates minimum water-level $\mu$ required to use all channels
 
         Args:
-            gain (np.ndarray): _description_ss
+            gain (np.ndarray): _description_
             sigma2 (float): _description_
 
         Returns:
@@ -75,12 +78,12 @@ class Capacity:
         RemoveChannels = 0
 
         minMu = sigma2 / (gain[NChannels - RemoveChannels - 1])
-        Ps = (minMu - sigma2 /(gain[np.arange(NChannels - RemoveChannels)]))
+        Ps = (minMu - sigma2 /(gain[:NChannels - RemoveChannels]))
 
         while (sum(Ps) > P) and (RemoveChannels < NChannels):
             RemoveChannels += 1
             minMu = sigma2 / (gain[NChannels - RemoveChannels - 1])
-            Ps = minMu - sigma2 / (gain[np.arange(NChannels - RemoveChannels)])
+            Ps = minMu - sigma2 / (gain[:NChannels - RemoveChannels])
 
         # Distributes the remaining power among the all the remaining channels
         Pdiff = P - np.sum(Ps)
@@ -88,7 +91,7 @@ class Capacity:
 
         # Put optimum power in the original channel order
         Palloc = np.zeros(NChannels)
-        Palloc[np.arange(NChannels - RemoveChannels)] = Paux
+        Palloc[:NChannels - RemoveChannels] = Paux
 
         return Palloc
 
