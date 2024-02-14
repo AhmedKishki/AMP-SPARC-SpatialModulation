@@ -56,7 +56,7 @@ class Plotter:
         plt.figure(figsize=(8, 6))
         plt.plot(EbN0, iter, label='iterations', color='blue')
         plt.axvline(x = limit, color = 'black', label = 'Shannon Limit')
-        plt.xlabel('$E_b/N_0$ (dB)')
+        plt.xlabel('$E_b/N_0$ (dB)') 
         plt.ylabel('Iterations')
         plt.title(f'{self.alphabet} Nt={self.Nt} Na={self.Na} Nr={self.Nr} L={self.Lin} Lh={self.Lh}')
         plt.legend()

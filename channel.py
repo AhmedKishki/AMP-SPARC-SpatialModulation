@@ -52,7 +52,7 @@ class Channel:
         """
         hr = np.random.normal(size=(self.Nr, self.Nt, self.Lh))
         hi = np.random.normal(size=(self.Nr, self.Nt, self.Lh))
-        h = (hr + 1j * hi) * np.sqrt(self.pdp / self.Nr / 2) 
+        h = (hr + 1j * hi) * np.sqrt(self.pdp * self.Lout / self.Nr / self.Lin / 2) 
         H = np.zeros((self.Lin*self.Nr, self.Lin*self.Nt), dtype=self.npdtype)
         for l in np.arange(self.Lh):
             H += np.kron(np.eye(self.Lin, self.Lin, -l), h[:,:, l])

@@ -9,11 +9,12 @@ from config import Config
 from data import Data
 from channel import Channel
 from loss import Loss
-from vamp import VAMP
+# from vamp import VAMP
+from vamp2 import VAMP
 from plotter import Plotter
 
 
-class Model:
+class Model(nn.Module):
     def __init__(self, config: Config) -> None:
         super().__init__()
         
@@ -71,28 +72,29 @@ if __name__ == "__main__":
     # Lin = 32
     # Lh = 6
     Nt = 128
-    Na = 8
-    Nr = 24
     Lin = 20
     Lh = 3
-    for trunc in ['trunc']:
-        for prof in ['uniform']:
-            for gen in ['segmented']:
-                config = Config(
-                                N_transmit_antenna=Nt,
-                                N_active_antenna=Na,
-                                N_receive_antenna=Nr,
-                                block_length=Lin,
-                                channel_length=Lh,
-                                channel_truncation=trunc,
-                                alphabet=alph,
-                                channel_profile=prof,
-                                generator_mode=gen,
-                                batch=1,
-                                iterations=200
-                                )
-                print(config.__dict__)
-                model = Model(config)
-                model.simulate(epochs=100, step=1, start=11.0, final=15.0, res=100)
-                Plotter(config, 'VAMP').plot_iter()
-                Plotter(config, 'VAMP').plot_metrics()
+    for trunc in ['tail']:
+        for Nr in [32, 24]:
+            for Na in [4, 8]:
+                for prof in ['uniform']:
+                    for gen in ['segmented']:
+                        config = Config(
+                                        N_transmit_antenna=Nt,
+                                        N_active_antenna=Na,
+                                        N_receive_antenna=Nr,
+                                        block_length=Lin,
+                                        channel_length=Lh,
+                                        channel_truncation=trunc,
+                                        alphabet=alph,
+                                        channel_profile=prof,
+                                        generator_mode=gen,
+                                        batch=1,
+                                        iterations=50
+                                        )
+                        print(config.__dict__)
+                        model = Model(config)
+                        model.simulate(epochs=100, step=1.0, start=15.0, final=25.0, res=100)
+                        # model.simulate(epochs=10_000, step=0.25, start=5.0, final=10.0, res=1000)
+                        Plotter(config, 'VAMP').plot_iter()
+                        Plotter(config, 'VAMP').plot_metrics()

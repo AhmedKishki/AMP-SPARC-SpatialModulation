@@ -10,25 +10,23 @@ from loss import Loss
 import numpy as np
 
 class Tracker:
-    def __init__(self, U:torch.Tensor, s:torch.Tensor, Vh:torch.Tensor, y:torch.Tensor, x:torch.Tensor, sigma2:float, sparsity: float):
+    def __init__(self, U:torch.Tensor, s:torch.Tensor, Vh:torch.Tensor, y:torch.Tensor, x:torch.Tensor, sigma2:float):
         self.U = U
         self.Uh = U.adjoint()
-        self.s = s
-        self.s2 = s**2
+        self.s = s.view(-1, 1)
+        self.s2 = self.s**2
         self.Vh = Vh
         self.V = Vh.adjoint()
-        self.noise_var = sigma2
-        self.sigma2 = torch.tensor(sigma2)
-        self.y_tilde = s.view(-1, 1) * self.Uh @ y
+        self.sigma2 = sigma2
+        self.gamma = torch.tensor(1.0)
+        self.y_tilde = (self.Uh @ y) / self.s
         self.r = torch.zeros_like(x)
         self.var = torch.ones_like(x, dtype=torch.float32)
-        self.r_tilde = torch.ones_like(x) * sparsity
-        self.sigma2_tilde = (sparsity)**2 * (1-sparsity) + (1-sparsity)**2 * sparsity
-        self.xmmse = None
-        self.eta = s.size(0) / Vh.size(1)
+        self.xmmse = torch.zeros_like(x)
+        self.eta = Vh.size(1) / s.size(0)
 
 class VAMPLayer(nn.Module):
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, damping=0.97) -> None:
         """_summary_
 
         Args:
@@ -41,14 +39,13 @@ class VAMPLayer(nn.Module):
         # self.denoiser = Shrink(config, 'shrinkOOK')
         self.denoiser = self.segmented_shrinkage
         
-        self.var_ratio_min = torch.tensor(1.0e-5)
-        self.var_ratio_max = 1.0 - self.var_ratio_min
-        self.var_min = torch.tensor(1.0e-9)
-        self.var_max = torch.tensor(1.0e5)
+        self.var_min = torch.tensor(1.0e-11)
+        self.var_max = torch.tensor(1.0e11)
+        self.rho = damping
         
     def forward(self,
                 T: Tracker):
-        """Adapted from prof. Kuehn
+        """Direct implementation of Rangan (with damping)
 
         Args:
             T (Tracker): _description_
@@ -56,47 +53,25 @@ class VAMPLayer(nn.Module):
         Returns:
             _type_: _description_
         """
-        var_ratio = T.noise_var / T.sigma2_tilde
-        q = T.Vh @ T.r_tilde
-        scale = 1 / (T.s2 + var_ratio)
+        xmmse, T.var = self.denoiser(T.r, T.gamma)
+        T.xmmse = self.rho * xmmse + (1 - self.rho) * T.xmmse
+        alpha = T.var.mean() * T.gamma
         
-        x_tilde = scale.view(-1, 1) * (T.y_tilde + var_ratio * q)
-        varLMMSE = scale.mean() * T.noise_var
-        x_tilde = T.V @ (x_tilde - q) + T.r_tilde
-        x_tilde_var = T.eta * varLMMSE + (1 - T.eta) * T.sigma2_tilde
-
-        alpha = x_tilde_var / T.sigma2_tilde
-        alpha = torch.max(alpha, self.var_ratio_min)
-        alpha = torch.min(alpha, self.var_ratio_max)
+        r_tilde = (T.xmmse - alpha * T.r) / (1 - alpha)
+        gamma_tilde = T.gamma * (1 - alpha) / alpha
+        gamma_tilde = torch.max(gamma_tilde, self.var_min)
+        gamma_tilde = torch.min(gamma_tilde, self.var_max)
         
-        T.r = (x_tilde - alpha * T.r_tilde) / (1 - alpha)
-        sigma2 = alpha/(1-alpha)*T.sigma2_tilde
-        sigma2 = torch.max(sigma2, self.var_min) 
-        sigma2 = torch.min(sigma2, self.var_max)
+        d = T.s2 / (T.s2 + T.sigma2 * gamma_tilde) 
+        gamma = gamma_tilde * d.mean() / (T.eta - d.mean())
+        T.gamma = self.rho * gamma + (1 - self.rho) * T.gamma
+        gamma = torch.max(gamma_tilde, self.var_min)
+        gamma = torch.min(gamma_tilde, self.var_max)
         
-        T.xmmse, T.var = self.denoiser(T.r, sigma2)
-        dxdr = T.var.mean() / sigma2
-        dxdr = torch.max(dxdr, self.var_ratio_min)
-        dxdr = torch.min(dxdr, self.var_ratio_max)
+        T.r = r_tilde + T.eta * T.V @ ((d / d.mean()) * (T.y_tilde - T.Vh @ r_tilde))
         
-        normScalar = 1 / (1 - dxdr)
-        
-        T.r_tilde = (T.xmmse - dxdr * T.r) * normScalar
-        T.sigma2_tilde = sigma2 * dxdr * normScalar
-        T.sigma2_tilde = torch.max(T.sigma2_tilde, self.var_min)
-        T.sigma2_tilde = torch.min(T.sigma2_tilde, self.var_max)
-        
-    def segmented_shrinkage(self, r: torch.Tensor, cov: torch.Tensor):
-        """OOK segmented shrinkage
-
-        Args:
-            r (torch.Tensor): _description_
-            cov (torch.Tensor): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        Lr = ((2*r.real - 1) / cov).view(self.B, self.L, self.M)
+    def segmented_shrinkage(self, r: torch.Tensor, gamma: torch.Tensor):
+        Lr = ((2*r.real - 1)*gamma).view(self.B, self.L, self.M)
         exp_Lr = torch.exp(self.regularize(Lr))
         sum_exp_Lr = exp_Lr.sum(dim=-1, keepdim=True).repeat_interleave(self.M, dim=-1)
         Le = - torch.log(sum_exp_Lr - exp_Lr)
@@ -139,7 +114,7 @@ class VAMP(nn.Module):
         Returns:
             xmmse: _description_
         """
-        T = Tracker(U, s, Vh, y, x, self.E / SNR, self.sparsity)
+        T = Tracker(U, s, Vh, y, x, self.E / SNR)
         self.L.dump()
         for t, layer in enumerate(self.layers):
             prev = T.var
