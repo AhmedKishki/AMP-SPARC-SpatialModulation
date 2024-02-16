@@ -18,7 +18,7 @@ some routines for computing entropies, mutual information etc.
 import numpy as np
 
 
-def mi_dmc(pmf_x,pmf_y_x):
+def mi_dmc(pmf_x, pmf_y_x):
     """
     inputs
     --------------------
@@ -90,7 +90,7 @@ def mi_awgn(x,pmf_x,snrdB=None,noiseVar=None,N=1000):
         sigma2N *= 2.0
     sigmaN = np.sqrt(sigma2N)
         
-    xmax = np.amax(np.abs(x))
+    xmax = np.amax(np.abs(x));
 
     mi = np.zeros(len(sigma2N))
     
@@ -256,6 +256,3 @@ def calc_MI(input,mode,N_samples=1000,var_max=50):
         raise ValueError("wrong parameter mode in {info_theory.py/calc_MI}")
         
     return output
-
-
-        

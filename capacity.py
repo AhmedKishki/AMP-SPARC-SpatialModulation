@@ -8,13 +8,13 @@ from config import Config
 from channel import Channel
 from data import Data
 
-from infotheory import mi_awgn
+from info_theory import mi_awgn
 
 class Capacity:
     def __init__(self, config: Config) -> None:
         config.device = 'cpu'
         self.Nt, self.Na, self.Nr = config.Nt, config.Na, config.Nr
-        self.N = config.Nt * config.Lin
+        self.Px = config.Na / config.Nr
         self.n = config.Nr * config.Lout
         self.channel = Channel(config)
         self.rate = config.code_rate
@@ -24,32 +24,32 @@ class Capacity:
         os.makedirs(self.path, exist_ok=True)
         
     @torch.no_grad()
-    def calculate(self, epochs: int, final = None, start = None, step: float = 1):
+    def calculate(self, epochs: int = 1000, final = None, start = None, step: float = 1):
         if start is None:
             start = int(np.ceil(self.min_snr))
         if final is None:
             final = start + 10.0
         EbN0dB_range = np.arange(start, final+step, step)
         SNRdB_range = EbN0dB_range + 10*np.log10(self.rate)
-        x = np.ones(self.n)*np.sqrt(self.Na / self.Nt)
         capacity = []
         for SNRdB, EbN0dB in zip(SNRdB_range, EbN0dB_range):
             print(f'EbN0dB={EbN0dB}')
             SNR = 10 ** ( SNRdB / 10)
-            sigma2 = self.Na / self.Nr / SNR
+            sigma2 = 1 / SNR
             Cawgn = np.log2(1 + SNR)
+            Cwf = 0.0
             Cfs = 0.0
             for _ in range(epochs):
                 H = self.channel.generate_channel()
                 g = torch.linalg.svdvals(H).numpy()**2
+                g = g / np.sum(g)
                 Pwf = self.water_filling(g, sigma2)
-                print(self.Na / self.Nr)
-                print(np.sum(Pwf*g))
-                Cwf = np.max([Cfs, np.sum(np.log2(1 + g * Pwf / sigma2))])
-            capacity.append([Cawgn, Cwf])
-            print(f'Cawgn: {Cawgn}, Cwf: {Cwf}')
+                Cwf = np.max([Cwf, np.sum(np.log2(1 + g * Pwf / sigma2))])
+                Cfs = np.max([Cfs, np.sum(np.log2(1 + g / sigma2))])
+            capacity.append([Cawgn, Cfs, Cwf])
+            print(f'Cawgn: {Cawgn}, Cwf: {Cwf}, Cfs: {Cfs}')
         capacity = np.array(capacity)
-        Cdict = {'EbN0dB': EbN0dB_range, 'SNRdB': SNRdB_range, 'Cawgn': capacity[:, 0], 'Cwf': capacity[:, 1]}
+        Cdict = {'EbN0dB': EbN0dB_range, 'SNRdB': SNRdB_range, 'Cawgn': capacity[:, 0], 'Cfs': capacity[:, 1], 'Cwf': capacity[:, 2]}
         pd.DataFrame(Cdict).to_csv(f'{self.path}/{config.Nt,config.Na,config.Nr,config.Lh}.csv')
         return capacity
     
@@ -73,7 +73,7 @@ class Capacity:
         Returns:
             _type_: _description_
         """
-        P = self.Na / self.Nt
+        P = self.n
         NChannels = len(gain)
         RemoveChannels = 0
 
