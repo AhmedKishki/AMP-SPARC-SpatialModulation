@@ -38,7 +38,8 @@ class Data:
             self._generator = self.random
         elif (config.mode == 'segmented' or config.mode == 'sparc'):
             assert self.Nt % self.Na == 0,'Na must divide Nt'
-            self.section = self.Nt // self.Na
+            self.L = self.Na * self.Lin
+            self.M = self.Nt // self.Na
             self._generator = self.segmented
 
     def generate_message(self) -> torch.Tensor:
@@ -57,14 +58,13 @@ class Data:
         Returns:
             _type_: _description_
         """
-        x = np.zeros((self.B, self.Lin, self.Nt), dtype=self.npdtype)
-        xgray = np.zeros((self.B, self.Lin, self.Nt), dtype=int) 
+        x = np.zeros((self.B, self.Nt*self.Lin), dtype=self.npdtype)
+        xgray = np.zeros((self.B, self.Nt*self.Lin), dtype=int) 
         for i in range(self.B):
-            for j in range(self.Lin):
-                space_index = np.random.choice(self.Nt, size=self.Na, replace=False)
-                mod_index = np.random.choice(self.cardinality)
-                x[i, j, space_index] = self.symbols[mod_index]
-                xgray[i, j, space_index] = self.gray[mod_index]
+            space_index = np.random.choice(self.Nt*self.Lin, size=self.Na*self.Lin, replace=False)
+            mod_index = np.random.choice(self.cardinality)
+            x[i, space_index] = self.symbols[mod_index]
+            xgray[i, space_index] = self.gray[mod_index]
         x = np.reshape(x, (self.B, -1, 1))
         index = x.ravel().nonzero()[0]
         symbol = xgray.ravel()[index]
@@ -76,11 +76,11 @@ class Data:
         Returns:
             _type_: _description_
         """
-        x = np.zeros((self.B, self.Lin, self.Nt), dtype=self.npdtype)
-        xgray = np.zeros((self.B, self.Lin, self.Nt), dtype=int) 
+        x = np.zeros((self.B, self.L, self.M), dtype=self.npdtype)
+        xgray = np.zeros((self.B, self.L, self.M), dtype=int) 
         for i in range(self.B):
-            for j in range(self.Lin):
-                space_index = [i*self.section + np.random.choice(self.section) for i in range(self.Na)]
+            for j in range(self.L):
+                space_index = np.random.choice(self.M)
                 mod_index = np.random.choice(self.cardinality)
                 x[i, j, space_index] = self.symbols[mod_index]
                 xgray[i, j, space_index] = self.gray[mod_index]

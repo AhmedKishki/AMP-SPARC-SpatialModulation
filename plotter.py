@@ -37,7 +37,7 @@ class Plotter:
         
         plt.figure(figsize=(8, 6))
         plt.semilogy(EbN0, fer_best, label='FER', color='blue')
-        plt.semilogy(EbN0, ver_best, label='VER', color='orange')
+        plt.semilogy(EbN0, ver_best, label='SER', color='orange')
         plt.semilogy(EbN0, nMSE_best, label='NMSE', color='red')
         plt.semilogy(EbN0, ber_best, label='BER', color='green')
         plt.axvline(x = limit, color = 'black', label = 'Shannon Limit')

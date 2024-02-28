@@ -112,12 +112,12 @@ def mi_awgn(x,pmf_x,snrdB=None,noiseVar=None,N=1000):
         pmf_y = np.zeros(len(y))
         cntrX = 0
         for runx in x:            
-            tmp = np.exp(-np.abs(y-runx)**2 / sigma2N[cntrVAR])
+            tmp = np.exp(-np.abs(y-runx)**2 / sigma2N[cntrVAR]) # runx * s NO
             pmf_y_x[:,cntrX] = tmp / np.sum(tmp)
             pmf_y += pmf_y_x[:,cntrX] * pmf_x[cntrX]
             cntrX += 1
 
-        # numerical integration to obtain mutual information 
+        # numerical integration to obtain mutual information b
         log_pmf_y_x = np.zeros(np.shape(pmf_y_x))
         ptr = np.nonzero(pmf_y_x)
         log_pmf_y_x[ptr] = np.log2(pmf_y_x[ptr])
@@ -174,7 +174,7 @@ def mi_awgn2(x,pmf_x,noise_var,N=1000):
 
         
         # determine p(y|x) and p(y)
-        pmf_y_x = np.zeros((len(y),len(x)))
+        pmf_y_x = np.zeros((len(y), len(x)))
         pmf_y = np.zeros(len(y))
         cntrX = 0
         for runx in x:            

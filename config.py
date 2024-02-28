@@ -155,3 +155,6 @@ class Config:
         
         # save
         self.name = f'{self.alphabet},{self.mode}/{self.profile},{self.trunc}/Nt={self.Nt},Na={self.Na},Nr={self.Nr},Lh={self.Lh},Lin={self.Lin}'
+        
+if __name__ == "__main__":
+    print(Config(128, 16, 16, 10, 3, alphabet='QPSK').__dict__)

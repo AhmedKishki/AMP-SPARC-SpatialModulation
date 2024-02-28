@@ -10,12 +10,12 @@ from data import Data
 
 from info_theory import mi_awgn
 
-class Capacity:
+class InfoTheory:
     def __init__(self, config: Config) -> None:
         config.device = 'cpu'
         self.Nt, self.Na, self.Nr = config.Nt, config.Na, config.Nr
-        self.Px = config.Na / config.Nr
-        self.n = config.Nr * config.Lout
+        self.symbols = config.symbols
+        self.ps = config.Ps
         self.channel = Channel(config)
         self.rate = config.code_rate
         self.shannon_limit = config.shannon_limit_dB
@@ -23,8 +23,7 @@ class Capacity:
         self.path = f'Simulations/Capacity/{config.name}'
         os.makedirs(self.path, exist_ok=True)
         
-    @torch.no_grad()
-    def calculate(self, epochs: int = 1000, final = None, start = None, step: float = 1):
+    def simulate(self, epochs: int = 1000, final = None, start = None, step: float = 1):
         if start is None:
             start = int(np.ceil(self.min_snr))
         if final is None:
@@ -39,21 +38,24 @@ class Capacity:
             Cawgn = np.log2(1 + SNR)
             Cwf = 0.0
             Cfs = 0.0
+            Mi = 0.0
             for _ in range(epochs):
                 H = self.channel.generate_channel()
                 g = torch.linalg.svdvals(H).numpy()**2
-                g = g / np.sum(g)
-                Pwf = self.water_filling(g, sigma2)
+                Pwf = self._water_filling(g, sigma2)
+                mi = self._mutual_information(g, sigma2)
                 Cwf = np.max([Cwf, np.sum(np.log2(1 + g * Pwf / sigma2))])
-                Cfs = np.max([Cfs, np.sum(np.log2(1 + g / sigma2))])
-            capacity.append([Cawgn, Cfs, Cwf])
-            print(f'Cawgn: {Cawgn}, Cwf: {Cwf}, Cfs: {Cfs}')
+                # Cfs = np.max([Cfs, np.sum(np.log2(1 + g / sigma2 / len(g)))])
+                Mi = np.max([Mi, mi])
+                print(mi, Cawgn)
+            capacity.append([Cawgn, Cfs, Cwf, mi])
+            print(f'Cawgn: {Cawgn}, Cwf: {Cwf}, Cfs: {Cfs}, Mi: {Mi}')
         capacity = np.array(capacity)
-        Cdict = {'EbN0dB': EbN0dB_range, 'SNRdB': SNRdB_range, 'Cawgn': capacity[:, 0], 'Cfs': capacity[:, 1], 'Cwf': capacity[:, 2]}
+        Cdict = {'EbN0dB': EbN0dB_range, 'SNRdB': SNRdB_range, 'Cawgn': capacity[:, 0], 'Cfs': capacity[:, 1], 'Cwf': capacity[:, 2], 'Mi': capacity[:, 3]}
         pd.DataFrame(Cdict).to_csv(f'{self.path}/{config.Nt,config.Na,config.Nr,config.Lh}.csv')
         return capacity
     
-    def water_filling(self, gain: np.ndarray, sigma2: float) -> np.ndarray:
+    def _water_filling(self, gain: np.ndarray, sigma2: float, power: float = 1) -> np.ndarray:
         """
         Calculates the water level that touches the worst channel (the higher
         one) and therefore transmits zero power in this worst channel. After
@@ -73,7 +75,8 @@ class Capacity:
         Returns:
             _type_: _description_
         """
-        P = self.n
+        P = power
+        gain = gain * self.Nr / self.Nt
         NChannels = len(gain)
         RemoveChannels = 0
 
@@ -94,12 +97,50 @@ class Capacity:
         Palloc[:NChannels - RemoveChannels] = Paux
 
         return Palloc
-
+    
+    def _mutual_information(self, gain: np.ndarray, SNR: float, N: int = 100) -> float:
+        gain = gain / len(gain)
+        symbols = self.symbols
+        
+        ps = self.ps
+        x = np.append(symbols, 0)
+        pmf_x = np.ones_like(symbols, dtype=np.float32) * ps
+        pmf_x = np.append(pmf_x, 1 - np.sum(pmf_x))
+        
+        Px = np.sum(np.abs(x)**2 * pmf_x)
+        sigma2 = Px / SNR
+        
+        xmax = np.amax(np.abs(x))
+        ymax = xmax + 10 * np.sqrt(sigma2)
+        ygrid = np.linspace(-ymax, ymax, N)
+        yr, yi = np.meshgrid(ygrid, ygrid)
+        y = (yr + 1j*yi).flatten()
+        
+        mi = 0
+        for g in gain:
+            pmf_y = np.zeros_like(y, dtype=np.float32)
+            pmf_y_x = np.zeros((len(y), len(x)), dtype=np.float32)
+            log_pmf_y = np.zeros_like(pmf_y)
+            log_pmf_y_x = np.zeros_like(pmf_y_x)
+            
+            for i, s in enumerate(x):
+                tmp = np.exp(- np.abs(y - np.sqrt(g)*s)**2 / sigma2)
+                pmf_y_x[:, i] = tmp / np.sum(tmp)
+                pmf_y += pmf_y_x[:, i] * pmf_x[i]
+            
+            log_pmf_y_x[np.nonzero(pmf_y_x)] = np.log2(pmf_y_x[np.nonzero(pmf_y_x)])
+            log_pmf_y[np.nonzero(pmf_y)] = np.log2(pmf_y[np.nonzero(pmf_y)])
+            
+            for i, _ in enumerate(x):
+                mi += np.sum(pmf_y_x[:, i] * (log_pmf_y_x[:, i] - log_pmf_y)) * pmf_x[i]
+            
+        return mi
+        
 if __name__ == "__main__":
     Nt = 128
     Lin = 20
     Lh = 3
-    alph='OOK'
+    alph = 'QPSK'
     for trunc in ['tail']:
         for Nr in [32, 24]:
             for Na in [4, 8]:
@@ -119,5 +160,5 @@ if __name__ == "__main__":
                                         iterations=50
                                         )
                         print(config.__dict__)
-                        print(Capacity(config).calculate(epochs=100))
+                        print(InfoTheory(config).simulate(epochs=100))
     

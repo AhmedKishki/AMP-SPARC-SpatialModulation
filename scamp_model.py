@@ -40,11 +40,15 @@ class Model(nn.Module):
         print(loss.loss['fer'], loss.loss['T'])
         return loss
     
-    def simulate(self, epochs: int, final = 10, start = 0, step: float = 1, res:int=1):
-        start = int(np.floor(self.min_snr + start))
+    def simulate(self, epochs: int, final = None, start = None, step: float = 1, res:int=1):
+        if start is None:
+            start = int(np.ceil(self.min_snr))
+        if final is None:
+            final = start + 10.0
         EbN0dB_range = np.arange(start, final+step, step)
         SNRdB_range = EbN0dB_range + 10*np.log10(self.rate)
         for SNRdB, EbN0dB in zip(SNRdB_range, EbN0dB_range):
+            print(f'EbN0dB={EbN0dB}')
             SNR = 10 ** ( SNRdB / 10)
             for i in range(epochs):
                 if i % res == 0:
@@ -54,40 +58,34 @@ class Model(nn.Module):
                 loss = self.amp(W, A, y, SNR, x, s, i)
                 self.loss.accumulate(loss)
             self.loss.average(epochs)
-            print(f'EbN0dB={EbN0dB}')
             print(f"FER={self.loss.loss['fer']}, iter={self.loss.loss['T']}")
             self.loss.export(SNRdB, EbN0dB, self.path)
 
 if __name__ == "__main__":
-    alph = 'OOK'
-    Nt = 1344
-    Na = 84
-    Nr = 73
+    Na = 8
     Lin = 32
-    Lh = 6
-    # Nt = 128
-    # Na = 8
-    # Nr = 24
-    # Lin = 20
-    # Lh = 3
+    iter = 100
     for trunc in ['tail']:
         for prof in ['uniform']:
             for gen in ['sparc']:
-                config = Config(
-                                N_transmit_antenna=Nt,
-                                N_active_antenna=Na,
-                                N_receive_antenna=Nr,
-                                block_length=Lin,
-                                channel_length=Lh,
-                                channel_truncation=trunc,
-                                alphabet=alph,
-                                channel_profile=prof,
-                                generator_mode=gen,
-                                batch=1,
-                                iterations=200
-                                )
-                print(config.__dict__)
-                model = Model(config)
-                # model.simulate(epochs=1000, step=1, final=6.0, res=100)
-                Plotter(config, 'SCAMP').plot_iter()
-                Plotter(config, 'SCAMP').plot_metrics()
+                for alph, Nt in [('QPSK', 128), ('BPSK', 256), ('OOK', 512)]:
+                    for Lh, Nr in [(12, 25)]: #[(6, 29), (9, 27), (3, 32)]
+                        config = Config(
+                                        N_transmit_antenna=Nt,
+                                        N_active_antenna=Na,
+                                        N_receive_antenna=Nr,
+                                        block_length=Lin,
+                                        channel_length=Lh,
+                                        channel_truncation=trunc,
+                                        alphabet=alph,
+                                        channel_profile=prof,
+                                        generator_mode=gen,
+                                        batch=1,
+                                        iterations=iter
+                                        )
+                        print(config.__dict__)
+                        model = Model(config)
+                        # model.simulate(epochs=100, step=1.0, final=8.0, res=100)
+                        model.simulate(epochs=10_000, start=5.0, final=8.0, step=0.25, res=1000)
+                        Plotter(config, 'SCAMP').plot_iter()
+                        Plotter(config, 'SCAMP').plot_metrics()
