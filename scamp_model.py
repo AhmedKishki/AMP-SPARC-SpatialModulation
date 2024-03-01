@@ -62,14 +62,14 @@ class Model(nn.Module):
             self.loss.export(SNRdB, EbN0dB, self.path)
 
 if __name__ == "__main__":
-    Na = 8
-    Lin = 32
+    Na = 16
+    Nr = 16
     iter = 100
     for trunc in ['tail']:
         for prof in ['uniform']:
             for gen in ['sparc']:
                 for alph, Nt in [('QPSK', 128), ('BPSK', 256), ('OOK', 512)]:
-                    for Lh, Nr in [(12, 25)]: #[(6, 29), (9, 27), (3, 32)]
+                    for Lh, Lin in [(6, 25), (9, 40), (3, 10)]:
                         config = Config(
                                         N_transmit_antenna=Nt,
                                         N_active_antenna=Na,
@@ -85,7 +85,7 @@ if __name__ == "__main__":
                                         )
                         print(config.__dict__)
                         model = Model(config)
-                        # model.simulate(epochs=100, step=1.0, final=8.0, res=100)
-                        model.simulate(epochs=10_000, start=5.0, final=8.0, step=0.25, res=1000)
+                        model.simulate(epochs=100, step=1.0, final=8.0, res=100)
+                        model.simulate(epochs=10_000, start=5.0, final=8.0, step=0.25, res=10)
                         Plotter(config, 'SCAMP').plot_iter()
                         Plotter(config, 'SCAMP').plot_metrics()
