@@ -93,11 +93,11 @@ class VAMPLayer(nn.Module):
         return a
         
 class VAMP(nn.Module):
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, damping: float = 1.0) -> None:
         super().__init__()
         self.E = config.Na / config.Nr
         self.sparsity = config.Na / config.Nt
-        self.layers = nn.ModuleList([VAMPLayer(config) for _ in range(config.N_Layers)])
+        self.layers = nn.ModuleList([VAMPLayer(config, damping) for _ in range(config.N_Layers)])
         self.L = Loss(config)
 
     def forward(self,

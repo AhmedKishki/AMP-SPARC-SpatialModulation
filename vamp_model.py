@@ -22,7 +22,7 @@ class Model(nn.Module):
         self.rate = config.code_rate
         self.shannon_limit = config.shannon_limit_dB
         self.min_snr = self.shannon_limit
-        self.amp = VAMP(config).to(config.device)
+        self.amp = VAMP(config, damping=1.0).to(config.device)
         self.loss = Loss(config)
         self.channel = Channel(config)
         self.data = Data(config)
@@ -56,22 +56,23 @@ class Model(nn.Module):
                 if i % res == 0:
                     _, A = self.channel.generate_as_sparc()
                     U, s, Vh = torch.linalg.svd(A, full_matrices=False)
-                x, s, i = self.data.generate_message()
+                x, sym, i = self.data.generate_message()
                 y = A @ x + self.channel.awgn(SNR)
-                loss = self.amp(U, s, Vh, y, SNR, x, s, i)
+                loss = self.amp(U, s, Vh, y, SNR, x, sym, i)
                 self.loss.accumulate(loss)
             self.loss.average(epochs)
             fer = self.loss.loss['fer']
             iter = self.loss.loss['T']
             print(f"FER={fer}, iter={iter}")
             self.loss.export(SNRdB, EbN0dB, self.path)
+            print(fer)
             if fer < 1e-3:
                 break
 
 if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     Na = 16
-    iter = 100
+    iter = 10
     for trunc in ['tail']:
         for prof in ['uniform']:
             for gen in ['segmented']:
@@ -95,6 +96,6 @@ if __name__ == "__main__":
                             print(config.__dict__)
                             model = Model(config)
                             model.simulate(epochs=100, step=1.0, res=2)
-                            model.simulate(epochs=10_000, start=6.0, final=10.0, step=0.25, res=100)
+                            # model.simulate(epochs=10_000, start=6.0, final=10.0, step=0.25, res=100)
                             Plotter(config, 'VAMPfinal').plot_iter()
                             Plotter(config, 'VAMPfinal').plot_metrics()
