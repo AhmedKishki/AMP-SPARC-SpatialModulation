@@ -60,7 +60,8 @@ class BAMPLayer(nn.Module):
         T.u = T.v + T.sigma2
         cov = 1 / (T.abs2T @ (1 / T.u))
         T.xmap = T.xmmse + cov * (T.adj @ ((T.y - T.z) / T.u))
-        T.xmmse, T.var = self.denoiser(T.xmap, cov)
+        T.xmmse = self.denoiser(T.xmap, cov)
+        T.var = 1 - T.xmmse.abs()**2
     
     def segmented_denoiser(self, s: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
         s = s.view(self.B, self.L, self.M, 1)
@@ -68,10 +69,8 @@ class BAMPLayer(nn.Module):
         x = (torch.tile(s / tau, dims=(1, 1, 1, self.K)) * self.symbols.conj()).real
         eta = torch.exp(x - x.abs().max())
         eta2 = self.symbols * eta
-        eta3 = self.symbols.abs()**2 * eta
         xmmse = eta2.sum(dim=-1) / eta.sum(dim=-1).sum(dim=2, keepdim=True)
-        var = eta3.sum(dim=-1) / eta.sum(dim=-1).sum(dim=2, keepdim=True) - xmmse.abs()**2
-        return xmmse.view(self.B, self.LM, 1).to(torch.complex64), var.view(self.B, self.LM, 1).to(torch.float32)
+        return xmmse.view(self.B, self.LM, 1).to(torch.complex64)
     
     def regularize(self, a: torch.Tensor):
         max = np.log(torch.finfo(a.dtype).max)

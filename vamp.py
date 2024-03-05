@@ -35,11 +35,17 @@ class VAMPLayer(nn.Module):
             config (Config): _description_
         """
         super().__init__()
-        self.Nt, self.Na, self.Nr, self.Lin, self.B = config.Nt, config.Na, config.Nr, config.Lin, config.B
+        self.Nt, self.Na, self.Lin, self.B = config.Nt, config.Na, config.Lin, config.B
+        self.K = config.K
         self.M = self.Nt // self.Na
         self.L = self.Na * self.Lin
-        # self.denoiser = Shrink(config, 'shrinkOOK')
-        self.denoiser = self.segmented_shrinkage
+        self.LM = self.L * self.M
+        self.symbols = torch.tensor(config.symbols, device=config.device)
+        
+        if config.mode in ['segmented', 'sparc']:
+            self.denoiser = self.segmented_denoiser
+        else:
+            self.denoiser = Shrink(config, 'bayes')
         
         self.var_ratio_min = torch.tensor(1.0e-5)
         self.var_ratio_max = 1.0 - self.var_ratio_min
@@ -74,7 +80,8 @@ class VAMPLayer(nn.Module):
         sigma2 = torch.max(sigma2, self.var_min) 
         sigma2 = torch.min(sigma2, self.var_max)
         
-        T.xmmse, T.var = self.denoiser(T.r, sigma2)
+        T.xmmse = self.denoiser(T.r, sigma2)
+        T.var = 1 - T.xmmse.abs()**2
         dxdr = T.var.mean() / sigma2
         dxdr = torch.max(dxdr, self.var_ratio_min)
         dxdr = torch.min(dxdr, self.var_ratio_max)
@@ -88,14 +95,12 @@ class VAMPLayer(nn.Module):
         
     def segmented_denoiser(self, s: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
         s = s.view(self.B, self.L, self.M, 1)
-        tau = tau.view(self.B, self.L, self.M, 1) / 2
+        # tau = tau.view(self.B, self.L, self.M, 1) / 2
         x = (torch.tile(s / tau, dims=(1, 1, 1, self.K)) * self.symbols.conj()).real
         eta = torch.exp(x - x.abs().max())
         eta2 = self.symbols * eta
-        eta3 = self.symbols.abs()**2 * eta
         xmmse = eta2.sum(dim=-1) / eta.sum(dim=-1).sum(dim=2, keepdim=True)
-        var = eta3.sum(dim=-1) / eta.sum(dim=-1).sum(dim=2, keepdim=True) - xmmse.abs()**2
-        return xmmse.view(self.B, self.LM, 1).to(torch.complex64), var.view(self.B, self.LM, 1).to(torch.float32)
+        return xmmse.view(self.B, self.LM, 1).to(torch.complex64)
     
     def regularize(self, a: torch.Tensor):
         max = np.log(torch.finfo(a.dtype).max)
