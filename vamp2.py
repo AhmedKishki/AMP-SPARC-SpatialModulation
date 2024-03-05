@@ -34,6 +34,7 @@ class VAMPLayer(nn.Module):
         """
         super().__init__()
         self.Nt, self.Na, self.Lin, self.B = config.Nt, config.Na, config.Lin, config.B
+        self.K = config.K
         self.M = self.Nt // self.Na
         self.L = self.Na * self.Lin
         self.LM = self.L * self.M
@@ -77,7 +78,7 @@ class VAMPLayer(nn.Module):
         
     def segmented_denoiser(self, s: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
         s = s.view(self.B, self.L, self.M, 1)
-        tau = tau.view(self.B, self.L, self.M, 1) / 2
+        # tau = tau.view(self.B, self.L, self.M, 1) / 2
         x = (torch.tile(s / tau, dims=(1, 1, 1, self.K)) * self.symbols.conj()).real
         eta = torch.exp(x - x.abs().max())
         eta2 = self.symbols * eta

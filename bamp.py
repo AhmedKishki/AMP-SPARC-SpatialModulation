@@ -33,6 +33,7 @@ class BAMPLayer(nn.Module):
         """
         super().__init__()
         self.Nt, self.Na, self.Lin, self.B = config.Nt, config.Na, config.Lin, config.B
+        self.K = config.K
         self.M = self.Nt // self.Na
         self.L = self.Na * self.Lin
         self.LM = self.L * self.M
