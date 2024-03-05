@@ -94,7 +94,7 @@ if __name__ == "__main__":
                                             )
                             print(config.__dict__)
                             model = Model(config)
-                            model.simulate(epochs=100, step=1.0, res=2)
+                            model.simulate(epochs=100, step=1.0, start=10, res=2)
                             model.simulate(epochs=10_000, start=6.0, final=10.0, step=0.25, res=100)
                             Plotter(config, 'VAMPfinal').plot_iter()
                             Plotter(config, 'VAMPfinal').plot_metrics()
