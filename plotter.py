@@ -2,13 +2,14 @@ import os
 import json
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 from config import Config
 
 class Plotter:
-    def __init__(self, config: Config, algorithm):
-        self.algorithm = algorithm
+    def __init__(self, config: Config, algorithm_name):
+        self.algorithm = algorithm_name
         self.mode = config.mode
         self.Nt, self.Na, self.Nr = config.Nt, config.Na, config.Nr
         self.Lin, self.Lh = config.Lin, config.Lh
@@ -16,7 +17,7 @@ class Plotter:
         self.iterations = config.N_Layers
         self.alphabet = config.alphabet
         self.name = f'{config.alphabet},Nt={config.Nt},Na={config.Na},Nr={config.Nr},Lh={config.Lh},{config.trunc},{config.mode},{config.profile}'
-        self.dir = f'Simulations/{algorithm}/{config.name}'
+        self.dir = f'Simulations/{algorithm_name}/{config.name}'
         self.sim = {}
         
         self.N = 0
@@ -65,6 +66,8 @@ class Plotter:
     
     def get_metrics(self):
         EbN0 = np.zeros(self.N)
+        SNRdB = np.zeros(self.N)
+        Capacity = np.zeros(self.N)
         iter = np.zeros(self.N)
         fer = np.zeros((self.N, self.iterations))
         ver = np.zeros((self.N, self.iterations))
@@ -83,6 +86,8 @@ class Plotter:
         
         for i, sim in self.sim.items():
             EbN0[i] = sim['EbN0dB']
+            SNRdB[i] = sim['SNRdB']
+            Capacity[i] = sim['C']
             iter[i] = sim['T']
             fer[i] = sim['fer']
             ver[i] = sim['ver']
@@ -99,8 +104,21 @@ class Plotter:
             nMSEm[i] = sim['nMSEm']
             nMSEL[i] = sim['nMSEL']
         limit = sim['ShannonLimitdB']
-            
+        
+        SIM = {'SNRdB': SNRdB, 
+               'C': Capacity,
+               'EbN0': EbN0, 
+               'ShannonLimit': limit, 
+               'Iter': iter, 
+               'FER': fer, 
+               'NMSE': nMSE, 
+               'SER': ver, 
+               'BER': ber}
+        
         return EbN0, limit, fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser, iter
+    
+    def json_to_csv(self, save_location):
+        pass
     
 if __name__ == "__main__":
     pass

@@ -86,25 +86,21 @@ class VAMPLayer(nn.Module):
         T.sigma2_tilde = torch.max(T.sigma2_tilde, self.var_min)
         T.sigma2_tilde = torch.min(T.sigma2_tilde, self.var_max)
         
-    def segmented_shrinkage(self, r: torch.Tensor, cov: torch.Tensor):
-        """OOK segmented shrinkage
-
-        Args:
-            r (torch.Tensor): _description_
-            cov (torch.Tensor): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        Lr = ((2*r.real - 1) / cov).view(self.B, self.L, self.M)
-        exp_Lr = torch.exp(self.regularize(Lr))
-        sum_exp_Lr = exp_Lr.sum(dim=-1, keepdim=True).repeat_interleave(self.M, dim=-1)
-        Le = - torch.log(sum_exp_Lr - exp_Lr)
-        Lx = Lr + Le
-        eta = torch.exp(self.regularize(Lx))
-        Exp = eta / (1 + eta)
-        Var = Exp * (1 - Exp)
-        return Exp.to(torch.complex64).view(self.B, self.L*self.M, 1), Var.to(torch.float32).view(self.B, self.L*self.M, 1)
+    def segmented_denoiser(self, s: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
+        s = s.view(self.B, self.L, self.M, 1)
+        tau = tau.view(self.B, self.L, self.M, 1) / 2
+        x = (torch.tile(s / tau, dims=(1, 1, 1, self.K)) * self.symbols.conj()).real
+        eta = torch.exp(x - x.abs().max())
+        eta2 = self.symbols * eta
+        eta3 = self.symbols.abs()**2 * eta
+        xmmse = eta2.sum(dim=-1) / eta.sum(dim=-1).sum(dim=2, keepdim=True)
+        var = eta3.sum(dim=-1) / eta.sum(dim=-1).sum(dim=2, keepdim=True) - xmmse.abs()**2
+        return xmmse.view(self.B, self.LM, 1).to(torch.complex64), var.view(self.B, self.LM, 1).to(torch.float32)
+    
+    def regularize(self, a: torch.Tensor):
+        max = np.log(torch.finfo(a.dtype).max)
+        a[a>=max] = max - 1
+        return a
     
     def regularize(self, a: torch.Tensor):
         max = np.log(torch.finfo(a.dtype).max)

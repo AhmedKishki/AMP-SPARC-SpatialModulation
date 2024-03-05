@@ -25,7 +25,7 @@ class Model(nn.Module):
         self.loss = Loss(config)
         self.channel = Channel(config)
         self.data = Data(config)
-        self.path = f'Simulations/SCAMP/{config.name}'
+        self.path = f'Simulations/SCAMPfinal/{config.name}'
         os.makedirs(self.path, exist_ok=True)
         
         # with open(f'{self.path}/config.json', 'w', encoding='utf-8') as f:
@@ -66,6 +66,7 @@ class Model(nn.Module):
                 break
 
 if __name__ == "__main__":
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     Na = 16
     iter = 100
     for trunc in ['tail']:
@@ -85,11 +86,12 @@ if __name__ == "__main__":
                                             channel_profile=prof,
                                             generator_mode=gen,
                                             batch=1,
-                                            iterations=iter
+                                            iterations=iter,
+                                            device=device
                                             )
                             print(config.__dict__)
                             model = Model(config)
-                            # model.simulate(epochs=100, step=1.0, res=2)
+                            model.simulate(epochs=100, step=1.0, res=2)
                             model.simulate(epochs=10_000, start=6.0, final=10.0, step=0.25, res=100)
-                            Plotter(config, 'SCAMP').plot_iter()
-                            Plotter(config, 'SCAMP').plot_metrics()
+                            Plotter(config, 'SCAMPfinal').plot_iter()
+                            Plotter(config, 'SCAMPfinal').plot_metrics()
