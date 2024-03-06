@@ -37,12 +37,13 @@ class BAMPLayer(nn.Module):
         self.M = self.Nt // self.Na
         self.L = self.Na * self.Lin
         self.LM = self.L * self.M
+        self.Ps, self.P0 = torch.tensor(config.Ps), torch.tensor(config.P0)
         self.symbols = torch.tensor(config.symbols, device=config.device)
         
         if config.mode in ['segmented', 'sparc']:
             self.denoiser = self.segmented_denoiser
         else:
-            self.denoiser = Shrink(config, 'bayes')
+            self.denoiser = self.random_denoiser
 
     def forward(self,
                 T: Tracker
@@ -71,6 +72,30 @@ class BAMPLayer(nn.Module):
         eta2 = self.symbols * eta
         xmmse = eta2.sum(dim=-1) / eta.sum(dim=-1).sum(dim=2, keepdim=True)
         return xmmse.view(self.B, self.LM, 1).to(torch.complex64)
+    
+    def random_denoiser(self, 
+                        r: torch.Tensor, 
+                        cov: torch.Tensor
+                        ) -> torch.Tensor:
+        """_summary_
+
+        Args:
+            u (torch.Tensor): _description_
+            v (torch.Tensor): _description_
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: _description_
+        """
+        G = lambda s: torch.exp(- torch.abs(r - s)**2 / cov )
+        G0, Gs = G(0), G(self.symbols)
+        norm = self.regularize_zero(self.P0 * G0 + self.Ps * torch.sum(Gs, dim=-1).unsqueeze(-1))
+        exp = self.Ps * torch.sum(self.symbols * Gs, dim=-1).unsqueeze(-1) / norm
+        # var = self.Ps * torch.sum(self.symbols2 * Gs, dim=-1).unsqueeze(-1) / norm - torch.abs(exp)**2
+        return exp
+    
+    def regularize_zero(self, a):
+        a[a==0.] = 1e-9
+        return a
     
     def regularize(self, a: torch.Tensor):
         max = np.log(torch.finfo(a.dtype).max)

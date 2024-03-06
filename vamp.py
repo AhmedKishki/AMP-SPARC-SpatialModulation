@@ -40,12 +40,13 @@ class VAMPLayer(nn.Module):
         self.M = self.Nt // self.Na
         self.L = self.Na * self.Lin
         self.LM = self.L * self.M
+        self.Ps, self.P0 = torch.tensor(config.Ps), torch.tensor(config.P0)
         self.symbols = torch.tensor(config.symbols, device=config.device)
         
         if config.mode in ['segmented', 'sparc']:
             self.denoiser = self.segmented_denoiser
         else:
-            self.denoiser = Shrink(config, 'bayes')
+            self.denoiser = self.random_denoiser
         
         self.var_ratio_min = torch.tensor(1.0e-5)
         self.var_ratio_max = 1.0 - self.var_ratio_min
@@ -93,7 +94,19 @@ class VAMPLayer(nn.Module):
         T.sigma2_tilde = torch.max(T.sigma2_tilde, self.var_min)
         T.sigma2_tilde = torch.min(T.sigma2_tilde, self.var_max)
         
-    def segmented_denoiser(self, s: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
+    def segmented_denoiser(self, 
+                           s: torch.Tensor, 
+                           tau: torch.Tensor
+                           ) -> torch.Tensor:
+        """_summary_
+
+        Args:
+            s (torch.Tensor): _description_
+            tau (torch.Tensor): _description_
+
+        Returns:
+            torch.Tensor: _description_
+        """
         s = s.view(self.B, self.L, self.M, 1)
         # tau = tau.view(self.B, self.L, self.M, 1) / 2
         x = (torch.tile(s / tau, dims=(1, 1, 1, self.K)) * self.symbols.conj()).real
@@ -102,9 +115,28 @@ class VAMPLayer(nn.Module):
         xmmse = eta2.sum(dim=-1) / eta.sum(dim=-1).sum(dim=2, keepdim=True)
         return xmmse.view(self.B, self.LM, 1).to(torch.complex64)
     
-    def regularize(self, a: torch.Tensor):
-        max = np.log(torch.finfo(a.dtype).max)
-        a[a>=max] = max - 1
+    def random_denoiser(self, 
+                        r: torch.Tensor, 
+                        cov: torch.Tensor
+                        ) -> torch.Tensor:
+        """_summary_
+
+        Args:
+            u (torch.Tensor): _description_
+            v (torch.Tensor): _description_
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: _description_
+        """
+        G = lambda s: torch.exp(- torch.abs(r - s)**2 / cov )
+        G0, Gs = G(0), G(self.symbols)
+        norm = self.regularize_zero(self.P0 * G0 + self.Ps * torch.sum(Gs, dim=-1).unsqueeze(-1))
+        exp = self.Ps * torch.sum(self.symbols * Gs, dim=-1).unsqueeze(-1) / norm
+        # var = self.Ps * torch.sum(self.symbols2 * Gs, dim=-1).unsqueeze(-1) / norm - torch.abs(exp)**2
+        return exp
+    
+    def regularize_zero(self, a):
+        a[a==0.] = 1e-9
         return a
     
     def regularize(self, a: torch.Tensor):
@@ -113,6 +145,7 @@ class VAMPLayer(nn.Module):
         return a
         
 class VAMP(nn.Module):
+    
     def __init__(self, config: Config) -> None:
         super().__init__()
         self.E = config.Na / config.Nr
