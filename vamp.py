@@ -82,7 +82,7 @@ class VAMPLayer(nn.Module):
         sigma2 = torch.min(sigma2, self.var_max)
         
         T.xmmse = self.denoiser(T.r, sigma2)
-        T.var = 1 - T.xmmse.abs()**2
+        T.var = (1 - T.xmmse.abs()**2).to(torch.float32)
         dxdr = T.var.mean() / sigma2
         dxdr = torch.max(dxdr, self.var_ratio_min)
         dxdr = torch.min(dxdr, self.var_ratio_max)
@@ -130,8 +130,8 @@ class VAMPLayer(nn.Module):
         """
         G = lambda s: torch.exp(- torch.abs(r - s)**2 / cov )
         G0, Gs = G(0), G(self.symbols)
-        norm = self.regularize_zero(self.P0 * G0 + self.Ps * torch.sum(Gs, dim=-1).unsqueeze(-1))
-        exp = self.Ps * torch.sum(self.symbols * Gs, dim=-1).unsqueeze(-1) / norm
+        norm = self.regularize_zero(self.P0 * G0 + self.Ps * torch.sum(Gs, dim=-1, keepdim=True))
+        exp = self.Ps * torch.sum(self.symbols * Gs, dim=-1, keepdim=True) / norm
         # var = self.Ps * torch.sum(self.symbols2 * Gs, dim=-1).unsqueeze(-1) / norm - torch.abs(exp)**2
         return exp
     

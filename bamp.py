@@ -62,7 +62,7 @@ class BAMPLayer(nn.Module):
         cov = 1 / (T.abs2T @ (1 / T.u))
         T.xmap = T.xmmse + cov * (T.adj @ ((T.y - T.z) / T.u))
         T.xmmse = self.denoiser(T.xmap, cov)
-        T.var = 1 - T.xmmse.abs()**2
+        T.var = (1 - T.xmmse.abs()**2).to(torch.float32)
     
     def segmented_denoiser(self, s: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
         s = s.view(self.B, self.L, self.M, 1)

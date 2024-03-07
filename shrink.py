@@ -78,7 +78,7 @@ class Shrink(nn.Module):
     def bayes(self, 
                   r: torch.Tensor, 
                   cov: torch.Tensor
-                  ) -> Tuple[torch.Tensor, torch.Tensor]:
+                  ) -> torch.Tensor:
         """_summary_
 
         Args:
@@ -92,8 +92,8 @@ class Shrink(nn.Module):
         G0, Gs = G(0), G(self.symbols)
         norm = self.regularize_zero(self.P0 * G0 + self.Ps * torch.sum(Gs, dim=-1).unsqueeze(-1))
         exp = self.Ps * torch.sum(self.symbols * Gs, dim=-1).unsqueeze(-1) / norm
-        var = self.Ps * torch.sum(self.symbols2 * Gs, dim=-1).unsqueeze(-1) / norm - torch.abs(exp)**2
-        return exp, var.to(torch.float32)
+        # var = self.Ps * torch.sum(self.symbols2 * Gs, dim=-1).unsqueeze(-1) / norm - torch.abs(exp)**2
+        return exp
     
     def shrink(self, 
                 r: torch.Tensor, 
