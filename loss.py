@@ -258,21 +258,22 @@ class Loss:
         Returns:
             Tuple[np.ndarray]: _description_
         """
-        xamp = xamp.reshape(self.Na * self.Lin, self.Nt // self.Na)
+        xamp = xamp.reshape(self.Lin, self.Nt)
         xhat = np.zeros_like(xamp)
         xgray = np.zeros_like(xamp, dtype=int)
         for j, x in enumerate(xamp):
             index = np.abs(x).argsort()[-self.Na:]
-            xs = x[index[-1]]
-            d = np.inf
-            for i, s in enumerate(self.symbols):
-                ds = np.abs(xs - s)
-                if ds < d:
-                    d = ds
-                    xgray[j, index] = self.gray[i]
-                    xhat[j, index] = s
-                    if ds == 0:
-                        break
+            for k in index:
+                xs = x[k]
+                d = np.inf
+                for i, s in enumerate(self.symbols):
+                    ds = np.abs(xs - s)
+                    if ds < d:
+                        d = ds
+                        xgray[j, k] = self.gray[i]
+                        xhat[j, k] = s
+                        if ds == 0:
+                            break
         xhat = xhat.ravel()
         index = np.sort(xhat.nonzero()[0])
         symbol = xgray.ravel()[index]

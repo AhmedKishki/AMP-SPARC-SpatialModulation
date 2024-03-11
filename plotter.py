@@ -26,9 +26,9 @@ class Plotter:
                 with open(f'{self.dir}/{sim}', 'r') as json_sim_file:
                     self.sim[self.N] = json.load(json_sim_file)
                     self.N += 1
-                    
+    
     def plot_metrics(self):
-        EbN0, limit, fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser, iter = self.get_metrics()
+        EbN0, limit, fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser, iter, SNRdB = self.get_metrics()
         sort = EbN0.argsort()
         EbN0 = EbN0[sort]
         ver_best = np.min(ver, axis=1)[sort]
@@ -44,13 +44,13 @@ class Plotter:
         plt.axvline(x = limit, color = 'black', label = 'Shannon Limit')
         plt.xlabel('$E_b/N_0$ (dB)')
         plt.ylabel('error rate')
-        plt.title(f'{self.alphabet} Nt={self.Nt} Na={self.Na} Nr={self.Nr} L={self.Lin} Lh={self.Lh}')
+        # plt.title(f'{self.alphabet} Nt={self.Nt} Na={self.Na} Nr={self.Nr} L={self.Lin} Lh={self.Lh}')
         plt.legend()
         plt.grid(True)
         plt.savefig(f'{self.dir}/{self.name}_plot.png')
         
     def plot_iter(self):
-        EbN0, limit, fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser, iter = self.get_metrics()
+        EbN0, limit, fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser, iter, SNRdB = self.get_metrics()
         sort = EbN0.argsort()
         EbN0 = EbN0[sort]
         iter = iter[sort]
@@ -59,7 +59,7 @@ class Plotter:
         plt.axvline(x = limit, color = 'black', label = 'Shannon Limit')
         plt.xlabel('$E_b/N_0$ (dB)') 
         plt.ylabel('Iterations')
-        plt.title(f'{self.alphabet} Nt={self.Nt} Na={self.Na} Nr={self.Nr} L={self.Lin} Lh={self.Lh}')
+        # plt.title(f'{self.alphabet} Nt={self.Nt} Na={self.Na} Nr={self.Nr} L={self.Lin} Lh={self.Lh}')
         plt.legend()
         plt.grid(True)
         plt.savefig(f'{self.dir}/{self.name}_iter_plot.png')
@@ -115,7 +115,7 @@ class Plotter:
                'SER': ver, 
                'BER': ber}
         
-        return EbN0, limit, fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser, iter
+        return EbN0, limit, fer, nMSE, nMSEf, nMSEm, nMSEL, ver, verf, verm, verL, ber, iber, sber, ier, ser, iter, SNRdB
     
     def json_to_csv(self, save_location):
         pass

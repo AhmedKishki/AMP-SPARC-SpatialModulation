@@ -58,13 +58,14 @@ class Data:
         Returns:
             _type_: _description_
         """
-        x = np.zeros((self.B, self.Nt*self.Lin), dtype=self.npdtype)
-        xgray = np.zeros((self.B, self.Nt*self.Lin), dtype=int) 
+        x = np.zeros((self.B, self.Lin, self.Nt), dtype=self.npdtype)
+        xgray = np.zeros((self.B, self.Lin, self.Nt), dtype=int) 
         for i in range(self.B):
-            space_index = np.random.choice(self.Nt*self.Lin, size=self.Na*self.Lin, replace=False)
-            mod_index = np.random.choice(self.cardinality)
-            x[i, space_index] = self.symbols[mod_index]
-            xgray[i, space_index] = self.gray[mod_index]
+            for j in range(self.Lin):
+                space_index = np.random.choice(self.Nt, size=self.Na, replace=False)
+                mod_index = np.random.choice(self.cardinality)
+                x[i, j, space_index] = self.symbols[mod_index]
+                xgray[i, j, space_index] = self.gray[mod_index]
         x = np.reshape(x, (self.B, -1, 1))
         index = x.ravel().nonzero()[0]
         symbol = xgray.ravel()[index]

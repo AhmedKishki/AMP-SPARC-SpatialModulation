@@ -26,7 +26,7 @@ class Model(nn.Module):
         self.loss = Loss(config)
         self.channel = Channel(config)
         self.data = Data(config)
-        self.path = f'Simulations/VAMPfinal/{config.name}'
+        self.path = f'Simulations/VAMP/{config.name}'
         os.makedirs(self.path, exist_ok=True)
         
         # with open(f'{self.path}/config.json', 'w', encoding='utf-8') as f:
@@ -70,14 +70,14 @@ class Model(nn.Module):
 
 if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    Na = 16
+    Na = 8
     iter = 100
     for trunc in ['tail']:
         for prof in ['uniform']:
-            for gen in ['segmented']:
-                for Nr in [32]:
-                    for alph, Nt in [('QPSK', 128), ('BPSK', 256), ('OOK', 512)]:
-                        for Lh, Lin in [(6, 25), (9, 40), (3, 10)]:
+            for gen in ['sparc']:
+                for Nr in [24]:
+                    for alph, Nt in [('OOK', 128)]:
+                        for Lh, Lin in [(3, 20)]:
                             config = Config(
                                             N_transmit_antenna=Nt,
                                             N_active_antenna=Na,
@@ -93,8 +93,8 @@ if __name__ == "__main__":
                                             device=device
                                             )
                             print(config.__dict__)
-                            model = Model(config)
-                            model.simulate(epochs=100, step=1.0, start=10, res=2)
-                            model.simulate(epochs=10_000, start=6.0, final=10.0, step=0.25, res=100)
-                            Plotter(config, 'VAMPfinal').plot_iter()
-                            Plotter(config, 'VAMPfinal').plot_metrics()
+                            # model = Model(config)
+                            # model.simulate(epochs=100, step=1.0, start=10, res=2)
+                            # model.simulate(epochs=10_000, start=6.0, final=10.0, step=0.25, res=100)
+                            Plotter(config, 'SCAMP').plot_iter()
+                            Plotter(config, 'SCAMP').plot_metrics()

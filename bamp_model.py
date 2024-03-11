@@ -68,14 +68,14 @@ class Model(nn.Module):
 
 if __name__ == "__main__":
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    Na = 16
+    Na = 8
     iter = 100
     for trunc in ['tail']:
         for prof in ['uniform']:
             for gen in ['segmented']:
-                for Nr in [32]:
-                    for alph, Nt in [('QPSK', 128), ('BPSK', 256), ('OOK', 512)]:
-                        for Lh, Lin in [(6, 25), (9, 40), (3, 10)]:
+                for Nr in [24]:
+                    for alph, Nt in [('OOK', 128)]:
+                        for Lh, Lin in [(3, 20)]:
                             config = Config(
                                             N_transmit_antenna=Nt,
                                             N_active_antenna=Na,
@@ -92,7 +92,7 @@ if __name__ == "__main__":
                                             )
                             print(config.__dict__)
                             model = Model(config)
-                            model.simulate(epochs=100, start=6, step=1.0, res=2)
-                            model.simulate(epochs=10_000, start=6.0, final=10.0, step=0.25, res=100)
+                            model.simulate(epochs=100, start=6.0, step=1.0, res=2)
+                            model.simulate(epochs=10_000, start=7.5, final=10.0, step=0.25, res=100)
                             Plotter(config, 'BAMPfinal').plot_iter()
                             Plotter(config, 'BAMPfinal').plot_metrics()

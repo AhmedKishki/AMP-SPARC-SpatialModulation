@@ -61,17 +61,20 @@ class BAMPLayer(nn.Module):
         T.u = T.v + T.sigma2
         cov = 1 / (T.abs2T @ (1 / T.u))
         T.xmap = T.xmmse + cov * (T.adj @ ((T.y - T.z) / T.u))
-        T.xmmse = self.denoiser(T.xmap, cov)
-        T.var = (1 - T.xmmse.abs()**2).to(torch.float32)
+        T.xmmse, T.var = self.denoiser(T.xmap, cov)
     
     def segmented_denoiser(self, s: torch.Tensor, tau: torch.Tensor) -> torch.Tensor:
         s = s.view(self.B, self.L, self.M, 1)
         tau = tau.view(self.B, self.L, self.M, 1) / 2
         x = (torch.tile(s / tau, dims=(1, 1, 1, self.K)) * self.symbols.conj()).real
         eta = torch.exp(x - x.abs().max())
-        eta2 = self.symbols * eta
-        xmmse = eta2.sum(dim=-1) / eta.sum(dim=-1).sum(dim=2, keepdim=True)
-        return xmmse.view(self.B, self.LM, 1).to(torch.complex64)
+        eta2 = eta.sum(dim=-1).sum(dim=2, keepdim=True)
+        xmmse = (self.symbols * eta).sum(dim=-1) / eta.sum(dim=-1).sum(dim=2, keepdim=True)
+        xmmse2 = torch.tile(xmmse.view(self.B, self.L, self.M, 1), dims=(1, 1, 1, self.K))
+        var0 = xmmse.abs()**2 * (1 - eta.sum(dim=-1) / eta2)
+        vars = (torch.abs(xmmse2 - self.symbols.view(1, 1, 1, -1))**2 * eta).sum(dim=-1) / eta2
+        var = var0 + vars
+        return xmmse.view(self.B, self.LM, 1).to(torch.complex64), var.view(self.B, self.LM, 1).to(torch.float32)
     
     def random_denoiser(self, 
                         r: torch.Tensor, 
@@ -90,8 +93,8 @@ class BAMPLayer(nn.Module):
         G0, Gs = G(0), G(self.symbols)
         norm = self.regularize_zero(self.P0 * G0 + self.Ps * torch.sum(Gs, dim=-1).unsqueeze(-1))
         exp = self.Ps * torch.sum(self.symbols * Gs, dim=-1).unsqueeze(-1) / norm
-        # var = self.Ps * torch.sum(self.symbols2 * Gs, dim=-1).unsqueeze(-1) / norm - torch.abs(exp)**2
-        return exp
+        var = self.Ps * torch.sum(self.symbols.abs()**2 * Gs, dim=-1).unsqueeze(-1) / norm - torch.abs(exp)**2
+        return exp.to(torch.complex64), var.to(torch.float32)
     
     def regularize_zero(self, a):
         a[a==0.] = 1e-9

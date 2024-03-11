@@ -81,8 +81,7 @@ class VAMPLayer(nn.Module):
         sigma2 = torch.max(sigma2, self.var_min) 
         sigma2 = torch.min(sigma2, self.var_max)
         
-        T.xmmse = self.denoiser(T.r, sigma2)
-        T.var = (1 - T.xmmse.abs()**2).to(torch.float32)
+        T.xmmse, T.var = self.denoiser(T.r, sigma2)
         dxdr = T.var.mean() / sigma2
         dxdr = torch.max(dxdr, self.var_ratio_min)
         dxdr = torch.min(dxdr, self.var_ratio_max)
@@ -111,9 +110,13 @@ class VAMPLayer(nn.Module):
         # tau = tau.view(self.B, self.L, self.M, 1) / 2
         x = (torch.tile(s / tau, dims=(1, 1, 1, self.K)) * self.symbols.conj()).real
         eta = torch.exp(x - x.abs().max())
-        eta2 = self.symbols * eta
-        xmmse = eta2.sum(dim=-1) / eta.sum(dim=-1).sum(dim=2, keepdim=True)
-        return xmmse.view(self.B, self.LM, 1).to(torch.complex64)
+        eta2 = eta.sum(dim=-1).sum(dim=2, keepdim=True)
+        xmmse = (self.symbols * eta).sum(dim=-1) / eta.sum(dim=-1).sum(dim=2, keepdim=True)
+        xmmse2 = torch.tile(xmmse.view(self.B, self.L, self.M, 1), dims=(1, 1, 1, self.K))
+        var0 = xmmse.abs()**2 * (1 - eta.sum(dim=-1) / eta2)
+        vars = (torch.abs(xmmse2 - self.symbols.view(1, 1, 1, -1))**2 * eta).sum(dim=-1) / eta2
+        var = var0 + vars
+        return xmmse.view(self.B, self.LM, 1).to(torch.complex64), var.view(self.B, self.LM, 1).to(torch.float32)
     
     def random_denoiser(self, 
                         r: torch.Tensor, 
