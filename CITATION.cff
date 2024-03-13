@@ -1,0 +1,21 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: AMP_for_Spatial_Modulation
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Ahmed
+    family-names: Al Kishki
+    email: alaa6394@gmail.com
+    affiliation: Rostock University
+  - {}
+repository-code: 'https://github.com/AhmedKishki/Prethesis'
+abstract: >-
+  Approximate Message Passing for Spatially Coupled Sparse
+  Signals applied to Spatial Modulation MIMO with Frequency
+  Selective channels
+license: MIT
